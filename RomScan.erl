@@ -1,6 +1,7 @@
 
 %% https://formats.kaitai.io/ines/index.html
 %% https://www.masswerk.at/6502/6502_instruction_set.html
+%% http://archive.6502.org/books/mcs6500_family_programming_manual.pdf
 
 main([FileName|_] = _Args) ->
 

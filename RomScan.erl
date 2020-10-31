@@ -29,10 +29,13 @@ main([FileName|_] = _Args) ->
 
     ProgramList = binary_to_list(PrgRom),
     PrgRomPart1 = list_to_binary(lists:sublist(ProgramList, 90)),
-    PrgRomPart2 = list_to_binary(lists:sublist(ProgramList, 131, 45)),
-    lists:foreach(PrintLine, d(trunc(math:pow(2, 15)), PrgRomPart1)),
+    % PrgRomPart2 = list_to_binary(lists:sublist(ProgramList, 131, 45)),
+    PrgRomPart2 = list_to_binary(lists:sublist(ProgramList, 37068 - 32768 + 1, 45)),
+    % lists:foreach(PrintLine, d(trunc(math:pow(2, 15)), PrgRomPart1)),
     io:format("----~n"),
-    lists:foreach(PrintLine, d(trunc(math:pow(2, 15)) + 131, PrgRomPart2)),
+    io:format("~p", [PrgRomPart2]),
+    % lists:foreach(PrintLine, d(trunc(math:pow(2, 15)) + 131, PrgRomPart2)),
+    lists:foreach(PrintLine, d(37068, PrgRomPart2)),
 
     %% Self = fun Self(I, <<"\x29", Rest/binary>>) ->
     %%                io:format("ZO-~p~n", [I]);
@@ -78,8 +81,8 @@ d(I, <<"\xEE", A:8, B:8, Rest/binary>>) -> [{I, "INC", A, B} | d(I+3, Rest)];
 
 d(I, <<OP:8, A:8, B:8, _Rest/binary>>) ->
     io:format("~w [~s|~2..0s.~2..0s]~n~n", [I, integer_to_list(OP, 16),
-                                     integer_to_list(A, 16),
-                                     integer_to_list(B, 16)]),
+                                            integer_to_list(A, 16),
+                                            integer_to_list(B, 16)]),
 
     [];
 

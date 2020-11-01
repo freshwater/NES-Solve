@@ -52,13 +52,20 @@ d(I, <<"\x09", A:8,      Rest/binary>>) -> [{I, "ORA", A}    | d(I+2, Rest)];
 d(I, <<"\x10", A:8,      Rest/binary>>) -> [{I, "BPL", A}    | d(I+2, Rest)];
 d(I, <<"\x20", A:8, B:8, Rest/binary>>) -> [{I, "JSR", A, B} | d(I+3, Rest)];
 d(I, <<"\x29", A:8,      Rest/binary>>) -> [{I, "AND", A}    | d(I+2, Rest)];
+d(I, <<"\x2C", A:8,      Rest/binary>>) -> [{I, "BIT", A}    | d(I+2, Rest)];
 
 d(I, <<"\x41", A:8,      Rest/binary>>) -> [{I, "EOR", A}    | d(I+2, Rest)];
 d(I, <<"\x4C", A:8, B:8, Rest/binary>>) -> [{I, "JMP", A, B} | d(I+3, Rest)];
 
+d(I, <<"\x60",           Rest/binary>>) -> [{I, "RTS"}       | d(I+1, Rest)];
+
 d(I, <<"\x78",           Rest/binary>>) -> [{I, "SEI"}       | d(I+1, Rest)];
+d(I, <<"\x85", A:8,      Rest/binary>>) -> [{I, "STA", A}    | d(I+2, Rest)];
+d(I, <<"\x86", A:8,      Rest/binary>>) -> [{I, "STX", A}    | d(I+2, Rest)];
+d(I, <<"\x88",           Rest/binary>>) -> [{I, "DEY"}       | d(I+1, Rest)];
 d(I, <<"\x8D", A:8, B:8, Rest/binary>>) -> [{I, "STA", A, B} | d(I+3, Rest)];
 
+d(I, <<"\x91", A:8,      Rest/binary>>) -> [{I, "STA"}       | d(I+2, Rest)];
 d(I, <<"\x9A",           Rest/binary>>) -> [{I, "TXS"}       | d(I+1, Rest)];
 
 d(I, <<"\xA0", A:8,      Rest/binary>>) -> [{I, "LDY", A}    | d(I+2, Rest)];
@@ -70,6 +77,7 @@ d(I, <<"\xAD", A:8, B:8, Rest/binary>>) -> [{I, "LDA", A, B} | d(I+3, Rest)];
 d(I, <<"\xB0", A:8,      Rest/binary>>) -> [{I, "BCS", A}    | d(I+2, Rest)];
 d(I, <<"\xBD", A:8, B:8, Rest/binary>>) -> [{I, "LDA", A, B, "X"} | d(I+3, Rest)];
 
+d(I, <<"\xC0", A:8,      Rest/binary>>) -> [{I, "CPY"}       | d(I+2, Rest)];
 d(I, <<"\xC8", A:8,      Rest/binary>>) -> [{I, "INY"}       | d(I+1, Rest)];
 d(I, <<"\xC9", A:8,      Rest/binary>>) -> [{I, "CMP", A}    | d(I+2, Rest)];
 d(I, <<"\xCA",           Rest/binary>>) -> [{I, "DEX"}       | d(I+1, Rest)];
@@ -77,6 +85,7 @@ d(I, <<"\xCA",           Rest/binary>>) -> [{I, "DEX"}       | d(I+1, Rest)];
 d(I, <<"\xD0", A:8,      Rest/binary>>) -> [{I, "BNE", A}    | d(I+2, Rest)];
 d(I, <<"\xD8",           Rest/binary>>) -> [{I, "CLD"}       | d(I+1, Rest)];
 
+d(I, <<"\xE0", A:8,      Rest/binary>>) -> [{I, "CPX", A}    | d(I+2, Rest)];
 d(I, <<"\xEE", A:8, B:8, Rest/binary>>) -> [{I, "INC", A, B} | d(I+3, Rest)];
 
 d(I, <<OP:8, A:8, B:8, _Rest/binary>>) ->

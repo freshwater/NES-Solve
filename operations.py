@@ -8,6 +8,77 @@ def byte(data):
 
 #-
 
+PPU_STATUS = 0x2002
+PPU_ADDRESS = 0x2006
+PPU_DATA = 0x2007
+RESET_VECTOR_L = 0xFFFC
+RESET_VECTOR_H = 0xFFFD
+STACK_ZERO = 0x0100
+STACK_OFFSET_INITIAL = 0xFD
+
+
+class Behaviors:
+    def reset_vblank_on_read(state, address):
+        """
+        http://wiki.nesdev.com/w/index.php/PPU_registers#PPUSTATUS
+        "Reading the status register will clear bit 7 mentioned above
+        and also the address latch used by PPUSCROLL and PPUADDR.
+        It does not clear the sprite 0 hit or overflow bit."
+        """
+        if address == PPU_STATUS:
+            state.memory.array[PPU_STATUS] &= 0x7F
+            state.ppu_address_latch = 0
+
+
+class State:
+
+    def __init__(self, program_data):
+        self.program_counter = 0
+        self.A = 0
+        self.X = 0
+        self.Y = 0
+        self.stack_offset = STACK_OFFSET_INITIAL
+        self.ppu_address_latch = 0
+
+        self.memory = Memory(self, program_data)
+
+        self.status_register = {
+            'Negative': 0,
+            'Zero': 0,
+            'Decimal': 0,
+            'Interrupt': 0,
+            'Carry': 0,
+            'Overflow': 0
+        }
+
+        self.reset()
+
+
+    def reset(self):
+        self.program_counter = self.memory[RESET_VECTOR_H]*0x100 + self.memory[RESET_VECTOR_L]
+        self.stack_offset = STACK_OFFSET_INITIAL
+
+
+class Memory:
+    def __init__(self, state, program_data):
+        self.state = state
+
+        self.array = np.zeros(0x10000, dtype=np.uint8)
+        self.array[0x8000:0x8000+len(program_data)] = program_data
+
+    def __getitem__(self, address):
+        result = self.array[address]
+
+        Behaviors.reset_vblank_on_read(self.state, address)
+
+        return result
+
+    def __setitem__(self, address, value):
+        self.array[address] = value
+
+
+#-
+
 
 _ = lambda x: x
 
@@ -18,108 +89,105 @@ def imm2(state, data1, data2):
     return data2*0x0100 + data1
 
 def zpg(state, data):
-    return state['Memory'][data]
+    return state.memory[data]
 
 def indx(state, data):
-    address = data + state['X']
-    return state['Memory'][(address + 1)*0x0100 + address*data]
+    address = data + state.X
+    return state.memory[(address + 1)*0x0100 + address*data]
 
 def indy(state, data):
-    address = state['Memory'][data+1]*0x0100 + state['Memory'][data]
-    return address + state['Y']
+    address = state.memory[data+1]*0x0100 + state.memory[data]
+    return address + state.Y
 
 def absy(state, data1, data2):
     address = data2*0x0100 + data1
-    return state['Memory'][address + state['Y']]
+    return state.memory[address + state.Y]
 
 def abs_read(state, data1, data2):
     address = data2*0x0100 + data1
-    # print(f'{address:04x} -> {state["Memory"][address]}')
-    result = state['Memory'][address]
-    if address == 0x2002:
-        state['Memory'][0x2002] &= 0x7F
+    result = state.memory[address]
 
     return result
 
 def abs_x_read(state, data1, data2):
-    x = state['X']
+    x = state.X
     # print(f'{data2*256 + data1:04x} + {x:02x} -> {state["Memory"][data2*0x0100 + data1 + x]}')
 
-    return state['Memory'][data2*0x0100 + data1 + x]
+    return state.memory[data2*0x0100 + data1 + x]
 
 
 #-
 
 
-def SEI(state, a) -> [(0x78, _)]: state['StatusRegister']['Interrupt'] = 1
-def CLD(state, a) -> [(0xD8, _)]: state['StatusRegister']['Decimal'] = 0
-def SEC(state, a) -> [(0x38, _)]: state['StatusRegister']['Carry'] = 1
+def SEI(state, a) -> [(0x78, _)]: state.status_register['Interrupt'] = 1
+def CLD(state, a) -> [(0xD8, _)]: state.status_register['Decimal'] = 0
+def SEC(state, a) -> [(0x38, _)]: state.status_register['Carry'] = 1
 
 def Z_set(state, value):
-    state['StatusRegister']['Zero'] = 1*(value == 0)
+    state.status_register['Zero'] = 1*(value == 0)
 
 def N_set(state, value):
-    state['StatusRegister']['Negative'] = 1*(value & 0x80 == 0x80)
+    state.status_register['Negative'] = 1*(value & 0x80 == 0x80)
 
 def LDA(state, a) -> [(0xA9, imm), (0xAD, abs_read), (0xBD, abs_x_read), (0xB1, indy)]:
-    state['Accumulator'] = a; Z_set(state, a); N_set(state, a)
-def LDX(state, a) -> [(0xA2, imm), (0xAE, abs_read)]: state['X'] = a; Z_set(state, a); N_set(state, a)
-def LDY(state, a) -> [(0xA0, imm), (0xAC, abs_read)]: state['Y'] = a; Z_set(state, a); N_set(state, a)
-def DEX(state, a) -> [(0xCA, _)]: state['X'] = byte(state['X'] - 1); Z_set(state, state['X']); N_set(state, state['X'])
-def DEY(state, a) -> [(0x88, _)]: state['Y'] = byte(state['Y'] - 1); Z_set(state, state['Y']); N_set(state, state['Y'])
-def INY(state, a) -> [(0xC8, _)]: state['Y'] = byte(state['Y'] + 1); Z_set(state, state['Y']); N_set(state, state['Y'])
-def INC(state, a) -> [(0xEE, imm2)]: state['Memory'][a] += 1; Z_set(state, state['Memory'][a]); N_set(state, state['Memory'][a])
+    state.A = a; Z_set(state, a); N_set(state, a)
+def LDX(state, a) -> [(0xA2, imm), (0xAE, abs_read)]: state.X = a; Z_set(state, a); N_set(state, a)
+def LDY(state, a) -> [(0xA0, imm), (0xAC, abs_read)]: state.Y = a; Z_set(state, a); N_set(state, a)
+def DEX(state, a) -> [(0xCA, _)]: state.X = byte(state.X - 1); Z_set(state, state.X); N_set(state, state.X)
+def DEY(state, a) -> [(0x88, _)]: state.Y = byte(state.Y - 1); Z_set(state, state.Y); N_set(state, state.Y)
+def INY(state, a) -> [(0xC8, _)]: state.Y = byte(state.Y + 1); Z_set(state, state.Y); N_set(state, state.Y)
+def INC(state, a) -> [(0xEE, imm2)]: state.memory[a] += 1; Z_set(state, state.memory[a]); N_set(state, state.memory[a])
 
 def BIT(state, a) -> [(0x2C, abs_read)]:
-    result = byte(state['Accumulator'] & a)
+    result = byte(state.A & a)
     Z_set(state, result)
     N_set(state, a)
-    state['StatusRegister']['Overflow'] = (a >> 6) & 0x01
+    state.status_register['Overflow'] = (a >> 6) & 0x01
 
 def CMP(state, a) -> [(0xC9, imm)]:
-    result = byte(state['Accumulator'] - a)
+    result = byte(state.A - a)
     Z_set(state, result); N_set(state, result)
-    if a <= state['Accumulator']:
-        state['StatusRegister']['Carry'] = 1
+    if a <= state.A:
+        state.status_register['Carry'] = 1
     else:
-        state['StatusRegister']['Carry'] = 0
+        state.status_register['Carry'] = 0
 
 def CPX(state, a) -> [(0xE0, imm)]:
-    result = state['X'] - a
+    result = state.X - a
     Z_set(state, result); N_set(state, result)
-    if a <= state['X']:
-        state['StatusRegister']['Carry'] = 1
+    if a <= state.X:
+        state.status_register['Carry'] = 1
     else:
-        state['StatusRegister']['Carry'] = 0
+        state.status_register['Carry'] = 0
 
 def CPY(state, a) -> [(0xC0, imm)]:
-    result = byte(state['Y'] - a)
+    result = byte(state.Y - a)
     Z_set(state, result); N_set(state, result)
-    if a <= state['Y']:
-        state['StatusRegister']['Carry'] = 1
+    if a <= state.Y:
+        state.status_register['Carry'] = 1
     else:
-        state['StatusRegister']['Carry'] = 0
+        state.status_register['Carry'] = 0
 
-def ORA(state, a) -> [(0x09, imm)]: state['Accumulator'] |= a; Z_set(state, state['Accumulator']); N_set(state, state['Accumulator'])
-def EOR(state, a): state['Accumulator'] ^= a; Z_set(state, state['Accumulator']); N_set(state, state['Accumulator'])
-def AND(state, a) -> [(0x29, imm)]: state['Accumulator'] &= a; Z_set(state, state['Accumulator']); N_set(state, state['Accumulator'])
+def ORA(state, a) -> [(0x09, imm)]: state.A |= a; Z_set(state, state.A); N_set(state, state.A)
+def EOR(state, a): state.A ^= a; Z_set(state, state.A); N_set(state, state.A)
+def AND(state, a) -> [(0x29, imm)]: state.A &= a; Z_set(state, state.A); N_set(state, state.A)
 def ASL(state, a) -> [(0x0A, _)]:
-    result = state['Accumulator'] << 1
+    result = state.A << 1
 
     Z_set(state, byte(result))
     N_set(state, byte(result))
-    state['StatusRegister']['Carry'] = 1*(result & 0xFF00 > 0)
+    state.status_register['Carry'] = 1*(result & 0xFF00 > 0)
 
-    state['Accumulator'] = byte(result)
+    state.A = byte(result)
 
 def LSR(state, a) -> [(0x4A, _)]:
-    result = state['Accumulator'] >> 1
+    result = state.A >> 1
 
     Z_set(state, result)
     N_set(state, result)
-    state['StatusRegister']['Carry'] = state['Accumulator'] & 0x01
+    state.status_register['Carry'] = state.A & 0x01
 
-    state['Accumulator'] = result
+    state.A = result
 
 once = set()
 def ADC(state, a) -> [(0x65, zpg)]:
@@ -131,92 +199,93 @@ def ADC(state, a) -> [(0x65, zpg)]:
     or -128, otherwise overflow is reset.
     """
 
-    result = state['Accumulator'] + a + state['StatusRegister']['Carry']
+    result = state.A + a + state.status_register['Carry']
 
     Z_set(state, byte(result))
     N_set(state, byte(result))
-    state['StatusRegister']['Carry'] = 1*(result & 0xFF00 > 0)
+    state.status_register['Carry'] = 1*(result & 0xFF00 > 0)
 
-    v1 =  ~(state['Accumulator'] ^ a) & (state['Accumulator'] ^ result) & 0x0080
-    flag_0 = state['Accumulator'] >> 7
+    v1 =  ~(state.A ^ a) & (state.A ^ result) & 0x0080
+    flag_0 = state.A >> 7
     flag_1 = result >> 7
-    v2 = (flag_1 != flag_0) and state['StatusRegister']['Carry']
+    v2 = (flag_1 != flag_0) and state.status_register['Carry']
 
-    state['StatusRegister']['Overflow'] = v1
+    state.status_register['Overflow'] = v1
     if v1 != 1*v2:
         if (v1, v2) not in once:
             once.add((v1, v2))
             print("V", v1, 1*v2)
 
-    state['Accumulator'] = byte(result)
+    state.A = byte(result)
 
 
 
 def STA(state, a) -> [(0x8D, imm2), (0x85, imm), (0x91, indy), (0x99, absy)]:
-    state['Memory'][a] = state['Accumulator']
-def STX(state, a) -> [(0x86, imm)]: state['Memory'][a] = state['X']
-def TXA(state, a) -> [(0x8A, _)]: state['Accumulator'] = state['X']; Z_set(state, state['Accumulator']); N_set(state, state['Accumulator'])
-def TYA(state, a) -> [(0x98, _)]: state['Accumulator'] = state['Y']; Z_set(state, state['Accumulator']); N_set(state, state['Accumulator'])
-def TAX(state, a) -> [(0xAA, _)]: state['X'] = state['Accumulator']; Z_set(state, state['X']); N_set(state, state['X'])
+    state.memory[a] = state.A
+def STX(state, a) -> [(0x86, imm)]: state.memory[a] = state.X
+def TXA(state, a) -> [(0x8A, _)]: state.A = state.X; Z_set(state, state.A); N_set(state, state.A)
+def TYA(state, a) -> [(0x98, _)]: state.A = state.Y; Z_set(state, state.A); N_set(state, state.A)
+def TAX(state, a) -> [(0xAA, _)]: state.X = state.A; Z_set(state, state.X); N_set(state, state.X)
 
-def TXS(state, a) -> [(0x9A, _)]: state['StackOffset'] = state['X']
+def TXS(state, a) -> [(0x9A, _)]: state.stack_offset = state.X
 
 def BPL(state, a) -> [(0x10, imm)]:
-    if state['StatusRegister']['Negative'] == 0:
-        state['ProgramCounter'] += np.int8(a)
+    if state.status_register['Negative'] == 0:
+        state.program_counter += np.int8(a)
 
 def BCC(state, a) -> [(0x90, imm)]:
-    if state['StatusRegister']['Carry'] == 0:
-        state['ProgramCounter'] += np.int8(a)
+    if state.status_register['Carry'] == 0:
+        state.program_counter += np.int8(a)
 
 def BCS(state, a) -> [(0xB0, imm)]:
-    if state['StatusRegister']['Carry'] == 1:
-        state['ProgramCounter'] += np.int8(a)
+    if state.status_register['Carry'] == 1:
+        state.program_counter += np.int8(a)
 
 def BNE(state, a) -> [(0xD0, imm)]:
-    if state['StatusRegister']['Zero'] == 0:
-        state['ProgramCounter'] += np.int8(a)
+    if state.status_register['Zero'] == 0:
+        state.program_counter += np.int8(a)
 
 def JMP(state, a) -> [(0x4C, imm2)]:
-    state['ProgramCounter'] = a
+    state.program_counter = a
 
 def JSR(state, a) -> [(0x20, imm2)]:
     # Stack is from range 0x0100-0x1FF and grows down from 0x0100 + 0xFD.
-    pc_H = state['ProgramCounter'] >> 8
-    pc_L = state['ProgramCounter'] & 0x00FF
+    pc_H = state.program_counter >> 8
+    pc_L = state.program_counter & 0x00FF
 
-    state['Memory'][state['StackZero'] + state['StackOffset']] = pc_H
-    state['StackOffset'] -= 1
-    state['Memory'][state['StackZero'] + state['StackOffset']] = pc_L
-    state['StackOffset'] -= 1
+    state.memory[STACK_ZERO + state.stack_offset] = pc_H
+    state.stack_offset -= 1
+    state.memory[STACK_ZERO + state.stack_offset] = pc_L
+    state.stack_offset -= 1
 
-    state['ProgramCounter'] = a
+    state.program_counter = a
 
 def NMI(state):
-    nmi_L = state['Memory'][0xFFFA]
-    nmi_H = state['Memory'][0xFFFB]
+    nmi_L = state.memory[0xFFFA]
+    nmi_H = state.memory[0xFFFB]
     data = nmi_H*0x0100 + nmi_L
 
     JSR(state, data)
 
 def RTS(state, a) -> [(0x60, _)]:
-    state['StackOffset'] += 1
-    pc_L = state['Memory'][state['StackZero'] + state['StackOffset']]
-    state['StackOffset'] += 1
-    pc_H = state['Memory'][state['StackZero'] + state['StackOffset']]
+    state.stack_offset += 1
+    pc_L = state.memory[STACK_ZERO + state.stack_offset]
+    state.stack_offset += 1
+    pc_H = state.memory[STACK_ZERO + state.stack_offset]
 
-    state['ProgramCounter'] = (pc_H << 8) + pc_L
+    state.program_counter = (pc_H << 8) + pc_L
 
 def PHA(state, a) -> [(0x48, _)]:
-    state['Memory'][state['StackZero'] + state['StackOffset']] = state['Accumulator']
-    state['StackOffset'] -= 1
+    state.memory[STACK_ZERO + state.stack_offset] = state.A
+    state.stack_offset -= 1
 
 def PLA(state, a) -> [(0x68, _)]:
-    state['StackOffset'] += 1
-    state['Accumulator'] = state['Memory'][state['StackZero'] + state['StackOffset']]
+    state.stack_offset += 1
+    state.A = state.memory[STACK_ZERO + state.stack_offset]
 
-    Z_set(state, state['Accumulator'])
-    N_set(state, state['Accumulator'])
+    Z_set(state, state.A)
+    N_set(state, state.A)
+
 
 #-
 
@@ -224,6 +293,6 @@ def PLA(state, a) -> [(0x68, _)]:
 instructions = {}
 byte_counts = {_: 1, imm: 2, imm2: 3, zpg: 2, abs_read: 3, abs_x_read: 3, indy: 2, absy: 3}
 for name, func in locals().copy().items():
-    if settings := callable(func) and func.__annotations__.get('return'):
+    if settings := hasattr(func, '__annotations__') and func.__annotations__.get('return'):
         for opcode, addressing in settings:
             instructions[opcode] = (func, byte_counts[addressing], addressing)

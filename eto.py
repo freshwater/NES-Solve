@@ -13,31 +13,6 @@ character_data = np.array(data['Character'], dtype=np.uint8)
 
 ##  begin
 
-state = {
-    'ProgramCounter': 0,
-    'Accumulator': 0, 'X': 0, 'Y': 0,
-    'StatusRegister': {
-        'Negative': 0,
-        'Zero': 0,
-        'Decimal': 0,
-        'Interrupt': 0,
-        'Carry': 0,
-        'Overflow': 0
-    }
-}
-
-memory = np.zeros(0x10000, dtype=np.uint8)
-memory[0x8000:0x8000+len(program_data)] = program_data
-
-state['Memory'] = memory
-
-##
-
-def reset():
-    state['ProgramCounter'] = state['Memory'][0xFFFD]*0x0100 + state['Memory'][0xFFFC]
-    state['StackZero'] = 0x0100
-    state['StackOffset'] = 0xFD
-
 ops = {}
 
 def visit(index, text):
@@ -45,8 +20,8 @@ def visit(index, text):
     ops[index] = (count + 1, text)
 
 def increment():
-    opcode = state['Memory'][state['ProgramCounter']]
-    state['ProgramCounter'] += 1
+    opcode = state.memory[state.program_counter]
+    state.program_counter += 1
 
     return opcode
 
@@ -69,9 +44,9 @@ def do(n):
 
                 if vblank == None and v == 241:
                     if h == 2:
-                        state['Memory'][PPU_STATUS] = 0x80
+                        state.memory[PPU_STATUS] = 0x80
 
-                        if state['Memory'][PPU_CONTROL] & 0x80:
+                        if state.memory[PPU_CONTROL] & 0x80:
                             # return n, v, h
                             NMI(state)
 
@@ -82,7 +57,7 @@ def do(n):
                     return _1, v, h
 
                 if n % 3 == 0:
-                    index = state['ProgramCounter']
+                    index = state.program_counter
                     opcode = increment()
                     indexes.append(index)
 
@@ -113,18 +88,15 @@ def do(n):
                     else:
                         1 / 0
 
-# do(12708 + 6611 + 1000)
-
-# vertical_blank()
-reset()
+state = State(program_data)
 
 labels = {
     "0778": "MIRROR_PPU_CTRL_1",
     "2000": "PPU_CTRL_1",
     "2001": "PPU_CTRL_2",
     "2002": "PPU_STATUS",
-    "2006": "PPU",
-    "2007": "PPU_IO",
+    "2006": "PPU_ADDRESS",
+    "2007": "PPU_DATA",
     "4014": "SPRITE",
     "8082": "NMI",
     "809E": "ScreenOff",
@@ -162,8 +134,9 @@ print('\n' + '\n'.join([
     for index, (count, d) in ops]) + '\n')
 
 print()
-opcode = state['Memory'][state['ProgramCounter']]
-print(hex(state['ProgramCounter']), state, hex(opcode.item()), opcode.item())
+# opcode = state['Memory'][state['ProgramCounter']]
+opcode = state.memory[state.program_counter]
+print(hex(state.program_counter), state, hex(opcode.item()), opcode.item())
 print()
 print("i", _1, "v", v, "h", h)
 print()

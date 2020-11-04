@@ -1,0 +1,60 @@
+
+
+0x01    ORA     2   Indirect    ;Or with Accumulator
+0x02    RTS     1               ;Return from Subroutine
+0x04
+0x09    ORA     2   Immediate   ;Or with Accumulator
+0x0A    ASL     1               ;Shift Left Accumulator
+0x0C    
+
+0x10    BPL     2   Relative    ;Branch on Plus
+0x20    JSR     3   Absolute    ;Jump to Subroutine
+0x29    AND     2   Immediate   ;And
+0x2C    BIT     3   Immediate   ;Bit test with Accumulator
+
+0x38    SEC     1               ;Set Carry Flag
+
+0x41    EOR     2   Indirect    ;Exclusive-Or with Accumulator
+0x44
+0x48    PHA     1               ;Push Accumulator onto Stack
+0x4A    LSR     1               ;Shift Right Accumulator
+0x4C    JMP     3   Absolute    ;Jump
+
+0x65    ADC     2   ZeroPage    ;Add Memory to Accumulator
+0x68    PLA     1               ;Pull Accumulator from Stack
+
+0x78    SEI     1               ;Set Interrupt
+0x85    STA     2   ZeroPage    ;Store Accumulator in Memory
+0x86    STX     2   ZeroPage    ;Store X in Memory
+0x88    DEY     1               ;Decrement Y
+0x8A    TXA     1               ;Transfer X to Accumulator
+0x8D    STA     3   Immediate   ;Store Accumulator in Memory
+
+0x90    BCC     2   Relative    ;Branch on Carry Clear
+0x91    STA     2   IndirectY   ;Store Accumulator
+0x98    TYA     1               ;Transfer Y to Accumulator
+0x99    STA     2   AbsoluteY   ;Store Accumulator
+0x9A    TXS     1               ;Transfer X to Stack Register
+
+0xA0    LDY     2   Immediate   ;Load Y
+0xA2    LDX     2   Immediate   ;Load X
+0xA9    LDA     2   Immediate   ;Load Accumulator
+0xAA    TAX     1               ;Transfer Accumulator to X
+0xAC    LDY     3   Absolute    ;Load Y
+0xAD    LDA     3   Absolute    ;Load Accumulator with Memory
+0xAE    LDX     3   Absolute    ;Load X with Memory
+
+0xB0    BCS     2   Relative    ;Branch on Carry Set
+0xB1    LDA     2   IndirectY   ;Load Accumulator with Memory
+0xBD    LDA     3   AbsoluteX   ;Load Accumulator with Memory
+
+0xC0    CPY     2   Immediate   ;Compare Y with Memory
+0xC8    INY     1               ;Increment Y
+0xC9    CMP     2   Immediate   ;Compare with Accumulator
+0xCA    DEX     1               ;Decrement
+
+0xD0    BNE     2   ;Branch on Not Zero             Relative             
+0xD8    CLD     1   ;Clear Decimal
+
+0xE0    CPX     2   Immediate   ;Compare X with Memory
+0xEE    INC     3   Absolute    ;Increment Memory

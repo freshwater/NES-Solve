@@ -8,7 +8,14 @@ def byte(data):
 
 #-
 
+PPU_CONTROL_1 = 0x2000
+PPU_CONTROL_2 = 0x2001
 PPU_STATUS = 0x2002
+
+PPU_SPR_ADDRESS = 0x2003
+PPU_SPR_DATA = 0x2004
+PPU_SPR_DMA = 0x4014
+
 PPU_ADDRESS = 0x2006
 PPU_DATA = 0x2007
 RESET_VECTOR_L = 0xFFFC
@@ -16,6 +23,12 @@ RESET_VECTOR_H = 0xFFFD
 STACK_ZERO = 0x0100
 STACK_OFFSET_INITIAL = 0xFD
 
+"""
+PPU_ADDRESS_MAP
+0x0000-0x1FFF   PATTERN_MEMORY
+0x2000-0x3EFF   NAME_TABLE_MEMORY
+0x3F00-0x3FFF   PALETTE_MEMORY
+"""
 
 class Behaviors:
     def reset_vblank_on_read(state, address):
@@ -53,9 +66,9 @@ class State:
 
         self.reset()
 
-
     def reset(self):
-        self.program_counter = self.memory[RESET_VECTOR_H]*0x100 + self.memory[RESET_VECTOR_L]
+        # self.program_counter = self.memory[RESET_VECTOR_H]*0x100 + self.memory[RESET_VECTOR_L]
+        self.program_counter = 0xC000
         self.stack_offset = STACK_OFFSET_INITIAL
 
 
@@ -64,7 +77,8 @@ class Memory:
         self.state = state
 
         self.array = np.zeros(0x10000, dtype=np.uint8)
-        self.array[0x8000:0x8000+len(program_data)] = program_data
+        # self.array[0x8000:0x8000+len(program_data)] = program_data
+        self.array[0xC000:0xC000+len(program_data)] = program_data
 
     def __getitem__(self, address):
         result = self.array[address]
@@ -93,7 +107,11 @@ def zpg(state, data):
 
 def indx(state, data):
     address = data + state.X
-    return state.memory[(address + 1)*0x0100 + address*data]
+    # return state.memory[(address + 1)*0x0100 + address*data]
+    return state.memory[(address + 1)*0x0100 + address]
+
+def zpgx(state, data):
+    return (state.memory[data + state.X], data + state.X)
 
 def indy(state, data):
     address = state.memory[data+1]*0x0100 + state.memory[data]
@@ -122,6 +140,7 @@ def abs_x_read(state, data1, data2):
 def SEI(state, a) -> [(0x78, _)]: state.status_register['Interrupt'] = 1
 def CLD(state, a) -> [(0xD8, _)]: state.status_register['Decimal'] = 0
 def SEC(state, a) -> [(0x38, _)]: state.status_register['Carry'] = 1
+def NOP(state, a) -> [(0xEA, _)]: pass
 
 def Z_set(state, value):
     state.status_register['Zero'] = 1*(value == 0)
@@ -129,7 +148,7 @@ def Z_set(state, value):
 def N_set(state, value):
     state.status_register['Negative'] = 1*(value & 0x80 == 0x80)
 
-def LDA(state, a) -> [(0xA9, imm), (0xAD, abs_read), (0xBD, abs_x_read), (0xB1, indy)]:
+def LDA(state, a) -> [(0xA5, zpg), (0xA9, imm), (0xAD, abs_read), (0xBD, abs_x_read), (0xB1, indy)]:
     state.A = a; Z_set(state, a); N_set(state, a)
 def LDX(state, a) -> [(0xA2, imm), (0xAE, abs_read)]: state.X = a; Z_set(state, a); N_set(state, a)
 def LDY(state, a) -> [(0xA0, imm), (0xAC, abs_read)]: state.Y = a; Z_set(state, a); N_set(state, a)
@@ -189,6 +208,22 @@ def LSR(state, a) -> [(0x4A, _)]:
 
     state.A = result
 
+def ROL(state, a) -> [(0x36, zpgx)]:
+    """
+    C <- MEM <- C,   N Z C
+    """
+
+    (value, memory_location) = a
+
+    result = (value << 1) & state.status_register['Carry']
+    state.status_register['Carry'] = 1*(result & 0xFF00 > 0)
+    result = byte(result)
+    Z_set(state, result)
+    N_set(state, result)
+
+    state.memory[memory_location] = result
+
+
 once = set()
 def ADC(state, a) -> [(0x65, zpg)]:
     """
@@ -245,6 +280,10 @@ def BNE(state, a) -> [(0xD0, imm)]:
     if state.status_register['Zero'] == 0:
         state.program_counter += np.int8(a)
 
+def BMI(state, a) -> [(0x30, imm)]:
+    if state.status_register['Negative'] == 1:
+        state.program_counter += np.int8(a)
+
 def JMP(state, a) -> [(0x4C, imm2)]:
     state.program_counter = a
 
@@ -291,7 +330,7 @@ def PLA(state, a) -> [(0x68, _)]:
 
 
 instructions = {}
-byte_counts = {_: 1, imm: 2, imm2: 3, zpg: 2, abs_read: 3, abs_x_read: 3, indy: 2, absy: 3}
+byte_counts = {_: 1, imm: 2, imm2: 3, zpg: 2, zpgx: 2, abs_read: 3, abs_x_read: 3, indy: 2, absy: 3}
 for name, func in locals().copy().items():
     if settings := hasattr(func, '__annotations__') and func.__annotations__.get('return'):
         for opcode, addressing in settings:

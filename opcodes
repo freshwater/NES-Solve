@@ -12,6 +12,8 @@
 0x29    AND     2   Immediate   ;And
 0x2C    BIT     3   Immediate   ;Bit test with Accumulator
 
+0x30    BMI     2   Relative    ;Branch on Result Minus
+0x36    ROL     2   ZeroPageX   ;Rotate Left
 0x38    SEC     1               ;Set Carry Flag
 
 0x41    EOR     2   Indirect    ;Exclusive-Or with Accumulator
@@ -38,6 +40,7 @@
 
 0xA0    LDY     2   Immediate   ;Load Y
 0xA2    LDX     2   Immediate   ;Load X
+0xA5    LDA     2   ZeroPage    ;Load Accumulator
 0xA9    LDA     2   Immediate   ;Load Accumulator
 0xAA    TAX     1               ;Transfer Accumulator to X
 0xAC    LDY     3   Absolute    ;Load Y
@@ -57,4 +60,5 @@
 0xD8    CLD     1   ;Clear Decimal
 
 0xE0    CPX     2   Immediate   ;Compare X with Memory
+0xEA    NOP     1               ;No Operation
 0xEE    INC     3   Absolute    ;Increment Memory

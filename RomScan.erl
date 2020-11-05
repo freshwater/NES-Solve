@@ -3,6 +3,9 @@
 %% https://www.masswerk.at/6502/6502_instruction_set.html
 %% https://gist.github.com/1wErt3r/4048722
 %% http://archive.6502.org/books/mcs6500_family_programming_manual.pdf
+%% http://bootgod.dyndns.org:7777/profile.php?id=270
+
+-export([d/2]).
 
 main([FileName|_] = _Args) ->
 
@@ -15,34 +18,22 @@ main([FileName|_] = _Args) ->
         _Unused:64,
 
         PrgRom:(PRG*2048*8)/binary,
-        _ChrRom:(CHR*1024*8)/binary>> = Data,
+        ChrRom:(CHR*1024*8)/binary>> = Data,
 
     Hex = fun(I) -> integer_to_list(I, 16) end,
-    PrintLine =
+    _PrintLine =
         fun ({I, OP, A, B, C}) -> io:format("~4..0s ~s $~2..0s~2..0s,~s~n", [Hex(I), OP, Hex(B), Hex(A), C]);
             ({I, OP, A, "X"}) -> io:format("~4..0s ~s $~2..0s,~s~n", [Hex(I), OP, Hex(A), "X"]);
             ({I, OP, A, B}) -> io:format("~4..0s ~s $~2..0s~2..0s~n", [Hex(I), OP, Hex(B), Hex(A)]);
             ({I, OP, A}) -> io:format("~4..0s ~s $~2..0s~n", [Hex(I), OP, Hex(A)]);
             ({I, OP}) -> io:format("~4..0s ~s~n", [Hex(I), OP]) end,
 
-    io:format("~n"),
+    % ProgramList = binary_to_list(PrgRom),
+    % PrgRomPart1 = list_to_binary(lists:sublist(ProgramList, 1, 5000)),
+    % lists:foreach(PrintLine, d(37068, PrgRomPart1)),
 
-    ProgramList = binary_to_list(PrgRom),
-    PrgRomPart1 = list_to_binary(lists:sublist(ProgramList, 90)),
-    % PrgRomPart2 = list_to_binary(lists:sublist(ProgramList, 131, 45)),
-    PrgRomPart2 = list_to_binary(lists:sublist(ProgramList, 37068 - 32768 + 1, 45)),
-    % lists:foreach(PrintLine, d(trunc(math:pow(2, 15)), PrgRomPart1)),
-    io:format("----~n"),
-    io:format("~p", [PrgRomPart2]),
-    % lists:foreach(PrintLine, d(trunc(math:pow(2, 15)) + 131, PrgRomPart2)),
-    lists:foreach(PrintLine, d(37068, PrgRomPart2)),
-
-    %% Self = fun Self(I, <<"\x29", Rest/binary>>) ->
-    %%                io:format("ZO-~p~n", [I]);
-    %%            Self(I, <<_A:8, Rest/binary>>) ->
-    %%                Self(I+1, Rest)
-    %%        end,
-    %% Self(0, PrgRom),
+    io:format("{\"Program\": ~w, \"Character\": ~w}",
+        [binary_to_list(PrgRom), binary_to_list(ChrRom)]),
 
     ok.
 
@@ -65,7 +56,7 @@ d(I, <<"\x86", A:8,      Rest/binary>>) -> [{I, "STX", A}    | d(I+2, Rest)];
 d(I, <<"\x88",           Rest/binary>>) -> [{I, "DEY"}       | d(I+1, Rest)];
 d(I, <<"\x8D", A:8, B:8, Rest/binary>>) -> [{I, "STA", A, B} | d(I+3, Rest)];
 
-d(I, <<"\x91", A:8,      Rest/binary>>) -> [{I, "STA"}       | d(I+2, Rest)];
+d(I, <<"\x91", A:8,      Rest/binary>>) -> [{I, "STA", A}    | d(I+2, Rest)];
 d(I, <<"\x9A",           Rest/binary>>) -> [{I, "TXS"}       | d(I+1, Rest)];
 
 d(I, <<"\xA0", A:8,      Rest/binary>>) -> [{I, "LDY", A}    | d(I+2, Rest)];
@@ -77,8 +68,8 @@ d(I, <<"\xAD", A:8, B:8, Rest/binary>>) -> [{I, "LDA", A, B} | d(I+3, Rest)];
 d(I, <<"\xB0", A:8,      Rest/binary>>) -> [{I, "BCS", A}    | d(I+2, Rest)];
 d(I, <<"\xBD", A:8, B:8, Rest/binary>>) -> [{I, "LDA", A, B, "X"} | d(I+3, Rest)];
 
-d(I, <<"\xC0", A:8,      Rest/binary>>) -> [{I, "CPY"}       | d(I+2, Rest)];
-d(I, <<"\xC8", A:8,      Rest/binary>>) -> [{I, "INY"}       | d(I+1, Rest)];
+d(I, <<"\xC0", A:8,      Rest/binary>>) -> [{I, "CPY", A}       | d(I+2, Rest)];
+d(I, <<"\xC8",           Rest/binary>>) -> [{I, "INY"}       | d(I+1, Rest)];
 d(I, <<"\xC9", A:8,      Rest/binary>>) -> [{I, "CMP", A}    | d(I+2, Rest)];
 d(I, <<"\xCA",           Rest/binary>>) -> [{I, "DEX"}       | d(I+1, Rest)];
 
@@ -95,6 +86,6 @@ d(I, <<OP:8, A:8, B:8, _Rest/binary>>) ->
 
     [];
 
-d(I, _Rest) ->
+d(_I, _Rest) ->
     %% io:format("[~p~n~p]~n~n", [I, _Rest]),
     [].

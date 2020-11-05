@@ -4,12 +4,6 @@ import numpy as np
 
 from operations import *
 
-with open('data/g.json', 'rb') as file:
-    data = json.loads(file.read())
-
-program_data = np.array(data['Program'], dtype=np.uint8)
-character_data = np.array(data['Character'], dtype=np.uint8)
-
 
 ##  begin
 
@@ -88,7 +82,22 @@ def do(n):
                     else:
                         1 / 0
 
+
+#-
+
+
+# with open('data/g.json', 'rb') as file:
+# with open('data/full_palette.json', 'rb') as file:
+with open('data/nestest.json', 'rb') as file:
+    data = json.loads(file.read())
+
+program_data = np.array(data['Program'], dtype=np.uint8)
+character_data = np.array(data['Character'], dtype=np.uint8)
+
+print(program_data[:5])
 state = State(program_data)
+print(state.memory[0xC000])
+
 
 labels = {
     "0778": "MIRROR_PPU_CTRL_1",
@@ -130,14 +139,12 @@ b = {'False': " ", '0': '●', '1': '•', '2': '⋅', '3': '⋅'}
 a = lambda i: b[str((i in indexes[-4:]) and indexes[-4:][::-1].index(i))]
 ops = sorted(ops.items())
 print('\n' + '\n'.join([
-    f'{l(index)}{a(index)}{count:4} {index:02X} .{d["opcode"]:02X} {d["operation"]} {r(d["byte_count"], d.get("data"), d["addressing"])}'
+    f'{l(index)}{a(index)}{count:4} {index:02X} {d["opcode"]:02X} {d["operation"]} {r(d["byte_count"], d.get("data"), d["addressing"])}'
     for index, (count, d) in ops]) + '\n')
 
 print()
-# opcode = state['Memory'][state['ProgramCounter']]
-opcode = state.memory[state.program_counter]
-print(hex(state.program_counter), state, hex(opcode.item()), opcode.item())
-print()
+# opcode = state.memory[state.program_counter]
+# print(hex(state.program_counter), state, hex(opcode.item()), opcode.item())
 print("i", _1, "v", v, "h", h)
 print()
 

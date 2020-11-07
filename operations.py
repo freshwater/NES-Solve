@@ -59,7 +59,7 @@ class State:
             'Negative': 0,
             'Zero': 0,
             'Decimal': 0,
-            'Interrupt': 0,
+            'Interrupt': 1,
             'Carry': 0,
             'Overflow': 0
         }
@@ -70,6 +70,16 @@ class State:
         # self.program_counter = self.memory[RESET_VECTOR_H]*0x100 + self.memory[RESET_VECTOR_L]
         self.program_counter = 0xC000
         self.stack_offset = STACK_OFFSET_INITIAL
+
+    def status_register_byte(self):
+        sr = self.status_register
+        status_register = (
+            (sr['Negative'] << 7) + (sr['Overflow'] << 6) + (1 << 5) + (0 << 4) +
+            (sr['Decimal'] << 3) + (sr['Interrupt'] << 2) + (sr['Zero'] << 1) + (sr['Carry'] << 0))
+
+        return status_register
+
+
 
 
 class Memory:
@@ -140,6 +150,8 @@ def abs_x_read(state, data1, data2):
 def SEI(state, a) -> [(0x78, _)]: state.status_register['Interrupt'] = 1
 def CLD(state, a) -> [(0xD8, _)]: state.status_register['Decimal'] = 0
 def SEC(state, a) -> [(0x38, _)]: state.status_register['Carry'] = 1
+def CLC(state, a) -> [(0x18, _)]: state.status_register['Carry'] = 0
+def SED(state, a) -> [(0xF8, _)]: state.status_register['Decimal'] = 1
 def NOP(state, a) -> [(0xEA, _)]: pass
 
 def Z_set(state, value):
@@ -157,11 +169,16 @@ def DEY(state, a) -> [(0x88, _)]: state.Y = byte(state.Y - 1); Z_set(state, stat
 def INY(state, a) -> [(0xC8, _)]: state.Y = byte(state.Y + 1); Z_set(state, state.Y); N_set(state, state.Y)
 def INC(state, a) -> [(0xEE, imm2)]: state.memory[a] += 1; Z_set(state, state.memory[a]); N_set(state, state.memory[a])
 
-def BIT(state, a) -> [(0x2C, abs_read)]:
-    result = byte(state.A & a)
-    Z_set(state, result)
-    N_set(state, a)
+# def BIT(state, a) -> [(0x2C, abs_read)]:
+#     result = byte(state.A & a)
+#     Z_set(state, result)
+#     N_set(state, a)
+#     state.status_register['Overflow'] = (a >> 6) & 0x01
+
+def BIT(state, a) -> [(0x24, zpg)]:
+    state.status_register['Negative'] = (a >> 7) & 0x01
     state.status_register['Overflow'] = (a >> 6) & 0x01
+    Z_set(state, byte(state.A & a))
 
 def CMP(state, a) -> [(0xC9, imm)]:
     result = byte(state.A - a)
@@ -268,6 +285,10 @@ def BPL(state, a) -> [(0x10, imm)]:
     if state.status_register['Negative'] == 0:
         state.program_counter += np.int8(a)
 
+def BMI(state, a) -> [(0x30, imm)]:
+    if state.status_register['Negative'] == 1:
+        state.program_counter += np.int8(a)
+
 def BCC(state, a) -> [(0x90, imm)]:
     if state.status_register['Carry'] == 0:
         state.program_counter += np.int8(a)
@@ -280,12 +301,20 @@ def BNE(state, a) -> [(0xD0, imm)]:
     if state.status_register['Zero'] == 0:
         state.program_counter += np.int8(a)
 
-def BMI(state, a) -> [(0x30, imm)]:
-    if state.status_register['Negative'] == 1:
+def BEQ(state, a) -> [(0xF0, imm)]:
+    if state.status_register['Zero'] == 1:
+        state.program_counter += np.int8(a)
+
+def BVC(state, a) -> [(0x50, imm)]:
+    if state.status_register['Overflow'] == 0:
         state.program_counter += np.int8(a)
 
 def JMP(state, a) -> [(0x4C, imm2)]:
     state.program_counter = a
+
+def BVS(state, a) -> [(0x70, imm)]:
+    if state.status_register['Overflow'] == 1:
+        state.program_counter += np.int8(a)
 
 def JSR(state, a) -> [(0x20, imm2)]:
     # Stack is from range 0x0100-0x1FF and grows down from 0x0100 + 0xFD.
@@ -316,6 +345,10 @@ def RTS(state, a) -> [(0x60, _)]:
 
 def PHA(state, a) -> [(0x48, _)]:
     state.memory[STACK_ZERO + state.stack_offset] = state.A
+    state.stack_offset -= 1
+
+def PHP(state, a) -> [(0x08, _)]:
+    state.memory[STACK_ZERO + state.stack_offset] = state.status_register_byte()
     state.stack_offset -= 1
 
 def PLA(state, a) -> [(0x68, _)]:

@@ -8,10 +8,12 @@ from operations import *
 ##  begin
 
 ops = {}
+log = []
 
 def visit(index, text):
     count, text = ops.get(index, (0, text))
     ops[index] = (count + 1, text)
+    log.append((index, text))
 
 def increment():
     opcode = state.memory[state.program_counter]
@@ -50,14 +52,22 @@ def do(n):
                 if n == 0:
                     return _1, v, h
 
-                if n % 3 == 0:
+                if True or n % 3 == 0:
                     index = state.program_counter
                     opcode = increment()
                     indexes.append(index)
 
+                    sr = state.status_register
+                    status_register = (
+                        (sr['Negative'] << 7) + (sr['Overflow'] << 6) + (1 << 5) + (0 << 4) +
+                        (sr['Decimal'] << 3) + (sr['Interrupt'] << 2) + (sr['Zero'] << 1) + (sr['Carry'] << 0))
+
                     operation, byte_count, addressing = instructions[opcode.item()]
                     visit_data = {'opcode': opcode, 'byte_count': byte_count,
-                                  'operation': operation.__name__, 'addressing': addressing}
+                                  'operation': operation.__name__, 'addressing': addressing,
+                                  'A': state.A, 'X': state.X, 'Y': state.Y,
+                                  'status_register': status_register,
+                                  'stack_pointer': state.stack_offset}
 
                     if byte_count == 1:
                         # here. merge dicts
@@ -69,14 +79,14 @@ def do(n):
 
                         fy = ",y" if addressing == indy else ""
 
-                        visit(index, visit_data | {'data': data})
+                        visit(index, visit_data | {'data': data, 'data1': data})
                         operation(state, addressing(state, data))
 
                     elif byte_count == 3:
                         data1, data2 = increment(), increment()
 
                         fy = ",y" if addressing == absy else ""
-                        visit(index, visit_data | {'data': data2*0x0100 + data1})
+                        visit(index, visit_data | {'data': data2*0x0100 + data1, 'data1': data1, 'data2': data2})
                         operation(state, addressing(state, data1, data2))
 
                     else:
@@ -91,62 +101,141 @@ def do(n):
 with open('data/nestest.json', 'rb') as file:
     data = json.loads(file.read())
 
+with open('data/nestest_AXYPSP.log') as file:
+    log_k = file.readlines()
+
 program_data = np.array(data['Program'], dtype=np.uint8)
 character_data = np.array(data['Character'], dtype=np.uint8)
 
-print(program_data[:5])
 state = State(program_data)
-print(state.memory[0xC000])
-
-
-labels = {
-    "0778": "MIRROR_PPU_CTRL_1",
-    "2000": "PPU_CTRL_1",
-    "2001": "PPU_CTRL_2",
-    "2002": "PPU_STATUS",
-    "2006": "PPU_ADDRESS",
-    "2007": "PPU_DATA",
-    "4014": "SPRITE",
-    "8082": "NMI",
-    "809E": "ScreenOff",
-    "8E92": "WriteBuffer",
-    "8EDD": "UpdateScreen",
-    "8EED": "WritePPUReg1",
-    "90CC": "InitializeMemory",
-}
-
-labels = {int(key, 16): value for key, value in labels.items()}
-l = lambda i: f'{labels.get(i, ""):15}'
 
 import sys
-_1, v, h = do(int(sys.argv[1]))
+_1, v, h = do(int(sys.argv[1]) + 1)
 
-def r(byte_count, data, addressing):
-    if data != None:
-        if byte_count == 1:
-            return ''
-        elif byte_count == 2:
-            if addressing == indy:
-                return f'${data:02X},y'
-            else:
-                return f'${data:02X}'
-        elif byte_count == 3:
-            return  f'${data:04X} {labels.get(data, "")}'
-    else:
-        return ''
+def to_line(op):
+    return op
 
-b = {'False': " ", '0': '●', '1': '•', '2': '⋅', '3': '⋅'}
-a = lambda i: b[str((i in indexes[-4:]) and indexes[-4:][::-1].index(i))]
+# for l1, l2 in zip()
+print()
+print(_1, v, h)
+print()
 ops = sorted(ops.items())
-print('\n' + '\n'.join([
-    f'{l(index)}{a(index)}{count:4} {index:02X} {d["opcode"]:02X} {d["operation"]} {r(d["byte_count"], d.get("data"), d["addressing"])}'
-    for index, (count, d) in ops]) + '\n')
+# for index, (count, op) in ops:
+for i, ((index, op), line_k) in enumerate(zip(log, log_k), 1):
+    del op['addressing']
+    # print('> ', op)
+    line_k = line_k.split()
 
-print()
-# opcode = state.memory[state.program_counter]
-# print(hex(state.program_counter), state, hex(opcode.item()), opcode.item())
-print("i", _1, "v", v, "h", h)
-print()
+    line = [f'{index:4X}', f'{op["opcode"]:02X}']
 
-# print(f":{state['Memory'][0x04A0]:X}")
-# print(hex(248))
+    if op['byte_count'] > 1:
+        line.append(f'{op["data1"]:02X}')
+
+    if op['byte_count'] > 2:
+        line.append(f'{op["data2"]:02X}')
+
+    line.append(f'{op["operation"]}')
+
+    if False:
+        pass
+
+    elif op["opcode"] == 0x10: #BPL
+        line.append(f'${index + 2 + np.int8(op["data1"]):04X}')
+    elif op["opcode"] == 0x24: #BIT
+        line.append(f'${op["data"]:02X}')
+        line_k = line_k[:5] + line_k[7:]
+    elif op["opcode"] == 0x50: # BVC
+        line.append(f'${index + 2 + np.int8(op["data1"]):04X}')
+    elif op["opcode"] == 0x70: # BVS
+        line.append(f'${index + 2 + np.int8(op["data1"]):04X}')
+    elif op["opcode"] == 0x85: #STA
+        # line.append(f'${op["data"]:02X} = {op["A"]:02X}')
+        line.append(f'${op["data"]:02X} = __')
+        line_k[6] = "__"
+    elif op["opcode"] == 0x86: #STX
+        line.append(f'${op["data"]:02X} = {op["X"]:02X}')
+    elif op["opcode"] == 0x90: #BCC
+        line.append(f'${index + 2 + np.int8(op["data1"]):04X}')
+    elif op["opcode"] == 0xB0: #BCS
+        line.append(f'${index + 2 + np.int8(op["data1"]):04X}')
+    elif op["opcode"] == 0xD0: #BCS
+        line.append(f'${index + 2 + np.int8(op["data1"]):04X}')
+    elif op["opcode"] == 0xF0: #BEQ
+        line.append(f'${index + 2 + np.int8(op["data1"]):04X}')
+    else:
+        if op['byte_count'] == 2:
+            line.append(f'#${op["data"]:02X}')
+        elif op['byte_count'] == 3:
+            line.append(f'${op["data"]:4X}')
+
+    line.append(f'A:{op["A"]:02X}')
+    line.append(f'X:{op["X"]:02X}')
+    line.append(f'Y:{op["Y"]:02X}')
+
+    line.append(f'P:{op["status_register"]:02X}')
+    line.append(f'SP:{op["stack_pointer"]:02X}')
+
+    l1 = ' '.join(line)
+    l2 = ' '.join(line_k)
+
+    if l1 == l2:
+        print('   ', l1)
+    else:
+        print(i)
+        print('j >', l1)
+        print('k >', l2)
+        print()
+
+        exit()
+
+## labels = {
+##     "0778": "MIRROR_PPU_CTRL_1",
+##     "2000": "PPU_CTRL_1",
+##     "2001": "PPU_CTRL_2",
+##     "2002": "PPU_STATUS",
+##     "2006": "PPU_ADDRESS",
+##     "2007": "PPU_DATA",
+##     "4014": "SPRITE",
+##     "8082": "NMI",
+##     "809E": "ScreenOff",
+##     "8E92": "WriteBuffer",
+##     "8EDD": "UpdateScreen",
+##     "8EED": "WritePPUReg1",
+##     "90CC": "InitializeMemory",
+## }
+## 
+## labels = {int(key, 16): value for key, value in labels.items()}
+## l = lambda i: f'{labels.get(i, ""):15}'
+## 
+## import sys
+## _1, v, h = do(int(sys.argv[1]))
+## 
+## def r(byte_count, data, addressing):
+##     if data != None:
+##         if byte_count == 1:
+##             return ''
+##         elif byte_count == 2:
+##             if addressing == indy:
+##                 return f'${data:02X},y'
+##             else:
+##                 return f'${data:02X}'
+##         elif byte_count == 3:
+##             return  f'${data:04X} {labels.get(data, "")}'
+##     else:
+##         return ''
+## 
+## b = {'False': " ", '0': '●', '1': '•', '2': '⋅', '3': '⋅'}
+## a = lambda i: b[str((i in indexes[-4:]) and indexes[-4:][::-1].index(i))]
+## ops = sorted(ops.items())
+## print('\n' + '\n'.join([
+##     f'{l(index)}{a(index)}{count:4} {index:02X} {d["opcode"]:02X} {d["operation"]} {r(d["byte_count"], d.get("data"), d["addressing"])}'
+##     for index, (count, d) in ops]) + '\n')
+## 
+## print()
+## # opcode = state.memory[state.program_counter]
+## # print(hex(state.program_counter), state, hex(opcode.item()), opcode.item())
+## print("i", _1, "v", v, "h", h)
+## print()
+## 
+## # print(f":{state['Memory'][0x04A0]:X}")
+## # print(hex(248))

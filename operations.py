@@ -42,6 +42,31 @@ class Behaviors:
             state.memory.array[PPU_STATUS] &= 0x7F
             state.ppu_address_latch = 0
 
+    def write_special_status_bits_on_push(function, status_register):
+        """
+        https://wiki.nesdev.com/w/index.php/Status_flags#The_B_flag
+        Two interrupts (/IRQ and /NMI) and two instructions (PHP and BRK)
+        push the flags to the stack. In the byte pushed, bit 5 is always
+        set to 1, and bit 4 is 1 if from an instruction (PHP or BRK) or 0
+        if from an interrupt line being pulled low (/IRQ or /NMI). This is
+        the only time and place where the B flag actually exists: not in
+        the status register itself, but in bit 4 of the copy that is
+        written to the stack.
+        """
+        return status_register | 0x20 | (0x10 if function in [PHP] else 0x00)
+
+    def read_special_status_bits_on_pull(state, function, data):
+        """
+        https://wiki.nesdev.com/w/index.php/Status_flags#The_B_flag
+        Two instructions (PLP and RTI) pull a byte from the stack and set all
+        the flags. They ignore bits 5 and 4.
+        """
+        bits = state.status_register_byte() & 0x30
+        data &= (0xFF - 0x30)
+        data |= bits
+
+        return data
+
 
 class State:
 
@@ -57,11 +82,13 @@ class State:
 
         self.status_register = {
             'Negative': 0,
-            'Zero': 0,
+            'Overflow': 0,
+            'Unused': 1,
+            'Break': 0,
             'Decimal': 0,
             'Interrupt': 1,
             'Carry': 0,
-            'Overflow': 0
+            'Zero': 0,
         }
 
         self.reset()
@@ -74,12 +101,15 @@ class State:
     def status_register_byte(self):
         sr = self.status_register
         status_register = (
-            (sr['Negative'] << 7) + (sr['Overflow'] << 6) + (1 << 5) + (0 << 4) +
+            (sr['Negative'] << 7) + (sr['Overflow'] << 6) + (sr['Unused'] << 5) + (sr['Break'] << 4) +
             (sr['Decimal'] << 3) + (sr['Interrupt'] << 2) + (sr['Zero'] << 1) + (sr['Carry'] << 0))
 
         return status_register
 
-
+    def status_register_byte_set(self, sr):
+        self.status_register = {
+            key: (sr >> bit) & 0x01
+            for key, bit in zip(self.status_register.keys(), [7, 6, 5, 4, 3, 2, 1, 0])}
 
 
 class Memory:
@@ -152,6 +182,7 @@ def CLD(state, a) -> [(0xD8, _)]: state.status_register['Decimal'] = 0
 def SEC(state, a) -> [(0x38, _)]: state.status_register['Carry'] = 1
 def CLC(state, a) -> [(0x18, _)]: state.status_register['Carry'] = 0
 def SED(state, a) -> [(0xF8, _)]: state.status_register['Decimal'] = 1
+def CLV(state, a) -> [(0xB8, _)]: state.status_register['Overflow'] = 0
 def NOP(state, a) -> [(0xEA, _)]: pass
 
 def Z_set(state, value):
@@ -168,6 +199,7 @@ def DEX(state, a) -> [(0xCA, _)]: state.X = byte(state.X - 1); Z_set(state, stat
 def DEY(state, a) -> [(0x88, _)]: state.Y = byte(state.Y - 1); Z_set(state, state.Y); N_set(state, state.Y)
 def INY(state, a) -> [(0xC8, _)]: state.Y = byte(state.Y + 1); Z_set(state, state.Y); N_set(state, state.Y)
 def INC(state, a) -> [(0xEE, imm2)]: state.memory[a] += 1; Z_set(state, state.memory[a]); N_set(state, state.memory[a])
+def INX(state, a) -> [(0xE8, _)]: state.X = byte(state.X + 1); Z_set(state, state.X); N_set(state, state.X)
 
 # def BIT(state, a) -> [(0x2C, abs_read)]:
 #     result = byte(state.A & a)
@@ -205,7 +237,7 @@ def CPY(state, a) -> [(0xC0, imm)]:
         state.status_register['Carry'] = 0
 
 def ORA(state, a) -> [(0x09, imm)]: state.A |= a; Z_set(state, state.A); N_set(state, state.A)
-def EOR(state, a): state.A ^= a; Z_set(state, state.A); N_set(state, state.A)
+def EOR(state, a) -> [(0x49, imm)]: state.A ^= a; Z_set(state, state.A); N_set(state, state.A)
 def AND(state, a) -> [(0x29, imm)]: state.A &= a; Z_set(state, state.A); N_set(state, state.A)
 def ASL(state, a) -> [(0x0A, _)]:
     result = state.A << 1
@@ -242,7 +274,7 @@ def ROL(state, a) -> [(0x36, zpgx)]:
 
 
 once = set()
-def ADC(state, a) -> [(0x65, zpg)]:
+def ADC(state, a) -> [(0x65, zpg), (0x69, imm)]:
     """
     A + M + C -> A, C                N Z C i d V
 
@@ -262,7 +294,7 @@ def ADC(state, a) -> [(0x65, zpg)]:
     flag_1 = result >> 7
     v2 = (flag_1 != flag_0) and state.status_register['Carry']
 
-    state.status_register['Overflow'] = v1
+    state.status_register['Overflow'] = 1*(v1 > 0)
     if v1 != 1*v2:
         if (v1, v2) not in once:
             once.add((v1, v2))
@@ -270,14 +302,27 @@ def ADC(state, a) -> [(0x65, zpg)]:
 
     state.A = byte(result)
 
+def SBC(state, a) -> [(0xE9, imm)]:
+    a ^= 0xFF
+    result = state.A + a + state.status_register['Carry']
 
+    Z_set(state, byte(result))
+    N_set(state, byte(result))
+    state.status_register['Carry'] = 1*(result & 0xFF00 > 0)
+
+    v1 =  ~(state.A ^ a) & (state.A ^ result) & 0x0080
+    state.status_register['Overflow'] = 1*(v1 > 0)
+
+    state.A = byte(result)
 
 def STA(state, a) -> [(0x8D, imm2), (0x85, imm), (0x91, indy), (0x99, absy)]:
     state.memory[a] = state.A
-def STX(state, a) -> [(0x86, imm)]: state.memory[a] = state.X
+def STX(state, a) -> [(0x86, imm), (0x8E, imm2)]: state.memory[a] = state.X
 def TXA(state, a) -> [(0x8A, _)]: state.A = state.X; Z_set(state, state.A); N_set(state, state.A)
 def TYA(state, a) -> [(0x98, _)]: state.A = state.Y; Z_set(state, state.A); N_set(state, state.A)
 def TAX(state, a) -> [(0xAA, _)]: state.X = state.A; Z_set(state, state.X); N_set(state, state.X)
+def TAY(state, a) -> [(0xA8, _)]: state.Y = state.A; Z_set(state, state.Y); N_set(state, state.Y)
+def TSX(state, a) -> [(0xBA, _)]: state.X = state.stack_offset; Z_set(state, state.X); N_set(state, state.X)
 
 def TXS(state, a) -> [(0x9A, _)]: state.stack_offset = state.X
 
@@ -318,8 +363,10 @@ def BVS(state, a) -> [(0x70, imm)]:
 
 def JSR(state, a) -> [(0x20, imm2)]:
     # Stack is from range 0x0100-0x1FF and grows down from 0x0100 + 0xFD.
-    pc_H = state.program_counter >> 8
-    pc_L = state.program_counter & 0x00FF
+    # Adjust for current program counter incrementing.
+    program_counter = state.program_counter - 1
+    pc_H = program_counter >> 8
+    pc_L = program_counter & 0x00FF
 
     state.memory[STACK_ZERO + state.stack_offset] = pc_H
     state.stack_offset -= 1
@@ -327,6 +374,25 @@ def JSR(state, a) -> [(0x20, imm2)]:
     state.stack_offset -= 1
 
     state.program_counter = a
+
+def BRK(state, a) -> [(0x00, _)]:
+    assert False, True
+    state.status_register['Interrupt'] = 1
+
+    pc_H = state.program_counter >> 8
+    pc_L = state.program_counter & 0x00FF
+    state.memory[STACK_ZERO + state.stack_offset] = pc_H
+    state.stack_offset -= 1
+    state.memory[STACK_ZERO + state.stack_offset] = pc_L
+    state.stack_offset -= 1
+
+    status_register = state.status_register_byte()
+    status_register = Behaviors.write_special_status_bits_on_push(BRK, status_register)
+    state.memory[STACK_ZERO + state.stack_offset] = status_register
+    # state.stack_offset -= 1
+
+    state.program_counter = state.memory[0xFFFF]*0x0100 + state.memory[0xFFFE]
+
 
 def NMI(state):
     nmi_L = state.memory[0xFFFA]
@@ -341,14 +407,20 @@ def RTS(state, a) -> [(0x60, _)]:
     state.stack_offset += 1
     pc_H = state.memory[STACK_ZERO + state.stack_offset]
 
-    state.program_counter = (pc_H << 8) + pc_L
+    program_counter = (pc_H << 8) + pc_L
+
+    # Adjust for current program counter incrementing.
+    state.program_counter = program_counter + 1
 
 def PHA(state, a) -> [(0x48, _)]:
     state.memory[STACK_ZERO + state.stack_offset] = state.A
     state.stack_offset -= 1
 
 def PHP(state, a) -> [(0x08, _)]:
-    state.memory[STACK_ZERO + state.stack_offset] = state.status_register_byte()
+    status_register = state.status_register_byte()
+    status_register = Behaviors.write_special_status_bits_on_push(PHP, status_register)
+
+    state.memory[STACK_ZERO + state.stack_offset] = status_register
     state.stack_offset -= 1
 
 def PLA(state, a) -> [(0x68, _)]:
@@ -357,6 +429,13 @@ def PLA(state, a) -> [(0x68, _)]:
 
     Z_set(state, state.A)
     N_set(state, state.A)
+
+def PLP(state, a) -> [(0x28, _)]:
+    state.stack_offset += 1
+    data = state.memory[STACK_ZERO + state.stack_offset]
+    data = Behaviors.read_special_status_bits_on_pull(state, PLP, data)
+
+    state.status_register_byte_set(data)
 
 
 #-

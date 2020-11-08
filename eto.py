@@ -11,9 +11,9 @@ ops = {}
 log = []
 
 def visit(index, text):
+    log.append((index, text))
     count, text = ops.get(index, (0, text))
     ops[index] = (count + 1, text)
-    log.append((index, text))
 
 def increment():
     opcode = state.memory[state.program_counter]
@@ -58,15 +58,12 @@ def do(n):
                     indexes.append(index)
 
                     sr = state.status_register
-                    status_register = (
-                        (sr['Negative'] << 7) + (sr['Overflow'] << 6) + (1 << 5) + (0 << 4) +
-                        (sr['Decimal'] << 3) + (sr['Interrupt'] << 2) + (sr['Zero'] << 1) + (sr['Carry'] << 0))
 
                     operation, byte_count, addressing = instructions[opcode.item()]
                     visit_data = {'opcode': opcode, 'byte_count': byte_count,
                                   'operation': operation.__name__, 'addressing': addressing,
                                   'A': state.A, 'X': state.X, 'Y': state.Y,
-                                  'status_register': status_register,
+                                  'status_register': state.status_register_byte(),
                                   'stack_pointer': state.stack_offset}
 
                     if byte_count == 1:
@@ -119,11 +116,8 @@ def to_line(op):
 print()
 print(_1, v, h)
 print()
-ops = sorted(ops.items())
-# for index, (count, op) in ops:
+
 for i, ((index, op), line_k) in enumerate(zip(log, log_k), 1):
-    del op['addressing']
-    # print('> ', op)
     line_k = line_k.split()
 
     line = [f'{index:4X}', f'{op["opcode"]:02X}']
@@ -144,6 +138,17 @@ for i, ((index, op), line_k) in enumerate(zip(log, log_k), 1):
     elif op["opcode"] == 0x24: #BIT
         line.append(f'${op["data"]:02X}')
         line_k = line_k[:5] + line_k[7:]
+    elif op["opcode"] == 0x8E: #STX
+        line.append(f'${op["data"]:04X}')
+        line_k = line_k[:6] + line_k[8:]
+    elif op["opcode"] == 0xAD: #LDA
+        line.append(f'${op["data"]:04X}')
+        line_k = line_k[:6] + line_k[8:]
+    elif op["opcode"] == 0xAE: #LDX
+        line.append(f'${op["data"]:04X}')
+        line_k = line_k[:6] + line_k[8:]
+    elif op["opcode"] == 0x30: # BMI
+        line.append(f'${index + 2 + np.int8(op["data1"]):04X}')
     elif op["opcode"] == 0x50: # BVC
         line.append(f'${index + 2 + np.int8(op["data1"]):04X}')
     elif op["opcode"] == 0x70: # BVS

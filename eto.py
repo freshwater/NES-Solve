@@ -149,13 +149,31 @@ for i, ((index, op), line_k) in enumerate(zip(log, log_k), 1):
         line.append(f'${op["data"]:02X}')
         line_k = line_k[:5] + line_k[7:]
 
+    elif op["opcode"] in [0x15, 0x16, 0x35, 0x36, 0x55, 0x56, 0x75, 0x76,
+                          0x94, 0x95, 0xB4, 0xB5, 0xD5, 0xD6, 0xF5, 0xF6]:
+        line.append(f'${op["data"]:02X},X')
+        line_k = line_k[:5] + line_k[9:]
+
+    elif op["opcode"] in [0x96, 0xB6]:
+        line.append(f'${op["data"]:02X},Y')
+        line_k = line_k[:5] + line_k[9:]
+
     elif op["opcode"] in [0x01, 0x21, 0x41, 0x61, 0x81, 0xC1, 0xE1]:
         line.append(f'(${op["data"]:02X},X)')
         line_k = line_k[:5] + line_k[11:]
 
+    elif op["opcode"] in [0x1D, 0x3D, 0x5D, 0x7D, 0x9D, 0xBC, 0xBD, 0xDD, 0xFD]:
+        line.append(f'${op["data"]:04X},X')
+        line_k = line_k[:6] + line_k[10:]
+
+    elif op["opcode"] in [0x19, 0x39, 0x59, 0x79, 0x99, 0xB9, 0xD9, 0xF9]:
+        line.append(f'${op["data"]:04X},Y')
+        line_k = line_k[:6] + line_k[10:]
+
     elif op["opcode"] in [0x11, 0x31, 0x51, 0x71, 0x91, 0xB1, 0xD1, 0xF1]:
         line.append(f'(${op["data"]:02X}),Y')
         line_k = line_k[:5] + line_k[11:]
+
 
     elif op["opcode"] in [0x0D, 0x0E, 0x2C, 0x2D, 0x2E, 0x4D, 0x4E, 0x6D, 0x6E, 0x8C, 0x8D,
                           0xAC, 0xAD, 0xCC, 0xCD, 0xCE, 0xEC, 0xED, 0xEE]:

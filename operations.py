@@ -156,8 +156,17 @@ def indx_write(state, data):
     H = state.memory[byte(data + state.X + 1)]
     return H*0x0100 + L
 
-def zpgx(state, data):
-    return (state.memory[data + state.X], data + state.X)
+def zpgx_read(state, data):
+    return state.memory[data + state.X]
+
+def zpgx_write(state, data):
+    return data + state.X
+
+def zpgy_read(state, data):
+    return state.memory[data + state.Y]
+
+def zpgy_write(state, data):
+    return data + state.Y
 
 def indy(state, data):
     # check
@@ -179,16 +188,21 @@ def absy(state, data1, data2):
     address = data2*0x0100 + data1
     return state.memory[address + state.Y]
 
+def absy_write(state, data1, data2):
+    address = data2*0x0100 + data1
+    return address + state.Y
+
 def abs_read(state, data1, data2):
     address = data2*0x0100 + data1
     result = state.memory[address]
 
     return result
 
-def abs_x_read(state, data1, data2):
-    x = state.X
+def absx_read(state, data1, data2):
+    return state.memory[data2*0x0100 + data1 + state.X]
 
-    return state.memory[data2*0x0100 + data1 + x]
+def absx_write(state, data1, data2):
+    return data2*0x0100 + data1 + state.X
 
 
 #-
@@ -208,17 +222,17 @@ def Z_set(state, value):
 def N_set(state, value):
     state.status_register['Negative'] = 1*(value & 0x80 == 0x80)
 
-def LDA(state, a) -> [(0xA1, indx), (0xA5, zpg), (0xA9, imm), (0xAD, abs_read), (0xB1, indy_read), (0xBD, abs_x_read)]:
+def LDA(state, a) -> [(0xA1, indx), (0xA5, zpg), (0xA9, imm), (0xAD, abs_read), (0xB1, indy_read), (0xB5, zpgx_read), (0xB9, absy), (0xBD, absx_read)]:
     state.A = a; Z_set(state, a); N_set(state, a)
-def LDX(state, a) -> [(0xA2, imm), (0xA6, zpg), (0xAE, abs_read)]: state.X = a; Z_set(state, a); N_set(state, a)
-def LDY(state, a) -> [(0xA0, imm), (0xA4, zpg), (0xAC, abs_read)]: state.Y = a; Z_set(state, a); N_set(state, a)
+def LDX(state, a) -> [(0xA2, imm), (0xA6, zpg), (0xAE, abs_read), (0xB6, zpgy_read)]: state.X = a; Z_set(state, a); N_set(state, a)
+def LDY(state, a) -> [(0xA0, imm), (0xA4, zpg), (0xAC, abs_read), (0xB4, zpgx_read), (0xBC, absx_read)]: state.Y = a; Z_set(state, a); N_set(state, a)
 def DEX(state, a) -> [(0xCA, _)]: state.X = byte(state.X - 1); Z_set(state, state.X); N_set(state, state.X)
 def DEY(state, a) -> [(0x88, _)]: state.Y = byte(state.Y - 1); Z_set(state, state.Y); N_set(state, state.Y)
 def INY(state, a) -> [(0xC8, _)]: state.Y = byte(state.Y + 1); Z_set(state, state.Y); N_set(state, state.Y)
-def INC(state, a) -> [(0xE6, imm), (0xEE, imm2)]: state.memory[a] += 1; Z_set(state, state.memory[a]); N_set(state, state.memory[a])
+def INC(state, a) -> [(0xE6, imm), (0xEE, imm2), (0xF6, zpgx_write)]: state.memory[a] += 1; Z_set(state, state.memory[a]); N_set(state, state.memory[a])
 def INX(state, a) -> [(0xE8, _)]: state.X = byte(state.X + 1); Z_set(state, state.X); N_set(state, state.X)
 
-def DEC_zpg(state, a) -> [(0xC6, imm), (0xCE, imm2)]:
+def DEC_zpg(state, a) -> [(0xC6, imm), (0xCE, imm2), (0xD6, zpgx_write)]:
     state.memory[a] -= 1
     Z_set(state, state.memory[a])
     N_set(state, state.memory[a])
@@ -234,7 +248,7 @@ def BIT_zpg(state, a) -> [(0x24, zpg)]:
     state.status_register['Overflow'] = (a >> 6) & 0x01
     Z_set(state, byte(state.A & a))
 
-def CMP(state, a) -> [(0xC1, indx), (0xC5, zpg), (0xC9, imm), (0xCD, abs_read), (0xD1, indy_read)]:
+def CMP(state, a) -> [(0xC1, indx), (0xC5, zpg), (0xC9, imm), (0xCD, abs_read), (0xD1, indy_read), (0xD5, zpgx_read), (0xD9, absy), (0xDD, absx_read)]:
     result = byte(state.A - a)
     Z_set(state, result); N_set(state, result)
     if a <= state.A:
@@ -258,9 +272,9 @@ def CPY(state, a) -> [(0xC0, imm), (0xC4, zpg), (0xCC, abs_read)]:
     else:
         state.status_register['Carry'] = 0
 
-def ORA(state, a) -> [(0x01, indx), (0x05, zpg), (0x09, imm), (0x0D, abs_read), (0x11, indy_read)]: state.A |= a; Z_set(state, state.A); N_set(state, state.A)
-def EOR(state, a) -> [(0x41, indx), (0x45, zpg), (0x49, imm), (0x4D, abs_read), (0x51, indy_read)]: state.A ^= a; Z_set(state, state.A); N_set(state, state.A)
-def AND(state, a) -> [(0x21, indx), (0x25, zpg), (0x29, imm), (0x2D, abs_read), (0x31, indy_read)]: state.A &= a; Z_set(state, state.A); N_set(state, state.A)
+def ORA(state, a) -> [(0x01, indx), (0x05, zpg), (0x09, imm), (0x0D, abs_read), (0x11, indy_read), (0x15, zpgx_read), (0x19, absy), (0x1D, absx_read)]: state.A |= a; Z_set(state, state.A); N_set(state, state.A)
+def EOR(state, a) -> [(0x41, indx), (0x45, zpg), (0x49, imm), (0x4D, abs_read), (0x51, indy_read), (0x55, zpgx_read), (0x59, absy), (0x5D, absx_read)]: state.A ^= a; Z_set(state, state.A); N_set(state, state.A)
+def AND(state, a) -> [(0x21, indx), (0x25, zpg), (0x29, imm), (0x2D, abs_read), (0x31, indy_read), (0x35, zpgx_read), (0x39, absy), (0x3D, absx_read)]: state.A &= a; Z_set(state, state.A); N_set(state, state.A)
 def ASL(state, a) -> [(0x0A, _)]:
     result = state.A << 1
 
@@ -270,7 +284,7 @@ def ASL(state, a) -> [(0x0A, _)]:
 
     state.A = byte(result)
 
-def ASL_zpg(state, a) -> [(0x06, imm), (0x0E, imm2)]:
+def ASL_zpg(state, a) -> [(0x06, imm), (0x16, zpgx_write), (0x0E, imm2)]:
     result = byte(state.memory[a] << 1)
 
     Z_set(state, result)
@@ -288,7 +302,7 @@ def LSR(state, a) -> [(0x4A, _)]:
 
     state.A = result
 
-def LSR_zpg(state, a) -> [(0x46, imm), (0x4E, imm2)]:
+def LSR_zpg(state, a) -> [(0x46, imm), (0x4E, imm2), (0x56, zpgx_write)]:
     result = state.memory[a] >> 1
 
     Z_set(state, result)
@@ -296,17 +310,6 @@ def LSR_zpg(state, a) -> [(0x46, imm), (0x4E, imm2)]:
     state.status_register['Carry'] = state.A & 0x01
 
     state.memory[a] = result
-
-def ROL_zpgx(state, a) -> [(0x36, zpgx)]:
-    (value, memory_location) = a
-
-    result = (value << 1) & state.status_register['Carry']
-    state.status_register['Carry'] = 1*(result & 0xFF00 > 0)
-    result = byte(result)
-    Z_set(state, result)
-    N_set(state, result)
-
-    state.memory[memory_location] = result
 
 def ROL(state, a) -> [(0x2A, _)]:
     result = (state.A << 1) | state.status_register['Carry']
@@ -317,7 +320,7 @@ def ROL(state, a) -> [(0x2A, _)]:
 
     state.A = result
 
-def ROL_zpg(state, a) -> [(0x26, imm), (0x2E, imm2)]:
+def ROL_zpg(state, a) -> [(0x26, imm), (0x2E, imm2), (0x36, zpgx_write)]:
     result = (state.memory[a] << 1) | state.status_register['Carry']
     state.status_register['Carry'] = 1*(result & 0xFF00 > 0)
     result = byte(result)
@@ -337,7 +340,7 @@ def ROR(state, a) -> [(0x6A, _)]:
 
     state.A = result
 
-def ROR_zpg(state, a) -> [(0x66, imm), (0x6E, imm2)]:
+def ROR_zpg(state, a) -> [(0x66, imm), (0x6E, imm2), (0x76, zpgx_write)]:
     result = state.status_register['Carry'] << 7
     state.status_register['Carry'] = state.memory[a] & 0x01
     result += state.memory[a] >> 1
@@ -347,9 +350,8 @@ def ROR_zpg(state, a) -> [(0x66, imm), (0x6E, imm2)]:
 
     state.memory[a] = result
 
-
 once = set()
-def ADC(state, a) -> [(0x61, indx), (0x71, indy_read), (0x65, zpg), (0x69, imm), (0x6D, abs_read)]:
+def ADC(state, a) -> [(0x61, indx), (0x65, zpg), (0x69, imm), (0x6D, abs_read), (0x71, indy_read), (0x75, zpgx_read), (0x79, absy), (0x7D, absx_read)]:
     result = state.A + a + state.status_register['Carry']
 
     Z_set(state, byte(result))
@@ -369,7 +371,7 @@ def ADC(state, a) -> [(0x61, indx), (0x71, indy_read), (0x65, zpg), (0x69, imm),
 
     state.A = byte(result)
 
-def SBC(state, a) -> [(0xE1, indx), (0xE5, zpg), (0xE9, imm), (0xED, abs_read), (0xF1, indy_read)]:
+def SBC(state, a) -> [(0xE1, indx), (0xE5, zpg), (0xE9, imm), (0xED, abs_read), (0xF1, indy_read), (0xF5, zpgx_read), (0xF9, absy), (0xFD, absx_read)]:
     a ^= 0xFF
     result = state.A + a + state.status_register['Carry']
 
@@ -382,10 +384,10 @@ def SBC(state, a) -> [(0xE1, indx), (0xE5, zpg), (0xE9, imm), (0xED, abs_read), 
 
     state.A = byte(result)
 
-def STA(state, a) -> [(0x81, indx_write), (0x8D, imm2), (0x85, imm), (0x91, indy), (0x99, absy)]:
+def STA(state, a) -> [(0x81, indx_write), (0x8D, imm2), (0x85, imm), (0x91, indy), (0x95, zpgx_write), (0x99, absy_write), (0x9D, absx_write)]:
     state.memory[a] = state.A
-def STX(state, a) -> [(0x86, imm), (0x8E, imm2)]: state.memory[a] = state.X
-def STY(state, a) -> [(0x84, imm), (0x8C, imm2)]: state.memory[a] = state.Y
+def STX(state, a) -> [(0x86, imm), (0x8E, imm2), (0x96, zpgy_write)]: state.memory[a] = state.X
+def STY(state, a) -> [(0x84, imm), (0x8C, imm2), (0x94, zpgx_write)]: state.memory[a] = state.Y
 def TXA(state, a) -> [(0x8A, _)]: state.A = state.X; Z_set(state, state.A); N_set(state, state.A)
 def TYA(state, a) -> [(0x98, _)]: state.A = state.Y; Z_set(state, state.A); N_set(state, state.A)
 def TAX(state, a) -> [(0xAA, _)]: state.X = state.A; Z_set(state, state.X); N_set(state, state.X)
@@ -523,8 +525,8 @@ def PLP(state, a) -> [(0x28, _)]:
 
 
 instructions = {}
-byte_counts = {_: 1, imm: 2, imm2: 3, zpg: 2, zpgx: 2, abs_read: 3, abs_x_read: 3,
-               indx: 2, indx_write: 2, indy: 2, indy_read: 2, ind: 3, absy: 3}
+byte_counts = {_: 1, imm: 2, imm2: 3, zpg: 2, zpgx_read: 2, zpgx_write: 2, zpgy_read: 2, zpgy_write: 2, abs_read: 3,
+               absx_read: 3, absx_write: 3, indx: 2, indx_write: 2, indy: 2, indy_read: 2, ind: 3, absy: 3, absy_write: 3}
 for name, func in locals().copy().items():
     if settings := hasattr(func, '__annotations__') and func.__annotations__.get('return'):
         for opcode, addressing in settings:

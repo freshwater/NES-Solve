@@ -14,7 +14,12 @@
 
 0x10    BPL     2   Relative    ;Branch on Plus
 0x11    ORA     2   IndirectY   ;Or with Accumulator
+0x15    ORA     2   ZeroPageX   ;Or with Accumulator
+0x16    ASL     2   ZeroPageX   ;Shift Left
 0x18    CLC     1               ;Clear Carry Flag
+0x19    ORA     3   AbsoluteY   ;Or with Accumulator
+0x1D    ORA     3   AbsoluteX   ;Or with Accumulator
+
 0x20    JSR     3   Absolute    ;Jump to Subroutine
 0x21    AND     2   IndirectX   ;And with Accumulator
 0x24    BIT     2   ZeroPage    ;Bit test Memory with Accumulator
@@ -28,8 +33,11 @@
 
 0x30    BMI     2   Relative    ;Branch on Result Minus
 0x31    AND     2   IndirectY   ;And with Accumulator
+0x35    AND     2   ZeroPageX   ;And with Accumulator
 0x36    ROL     2   ZeroPageX   ;Rotate Left
 0x38    SEC     1               ;Set Carry Flag
+0x39    AND     3   AbsoluteY   ;And with Accumulator
+0x3D    AND     3   AbsoluteX   ;And with Accumulator
 
 0x40    RTI     1               ;Return from Interrupt
 0x41    EOR     2   Indirect    ;Exclusive Or with Accumulator
@@ -45,6 +53,10 @@
 
 0x50    BVC     2   Relative    ;Branch on Overflow Clear
 0x51    EOR     2   IndirectY   ;Exclusive Or with Accumulator
+0x55    EOR     2   ZeroPageX   ;Exclusive Or with Accumulator
+0x56    LSR     2   ZeroPageX   ;Shift Right
+0x59    EOR     3   AbsoluteY   ;Exclusive Or with Accumulator
+0x5D    EOR     3   AbsoluteX   ;Exclusive Or with Accumulator
 
 0x61    ADC     2   IndirectX   ;Add Memory to Accumulator
 0x65    ADC     2   ZeroPage    ;Add Memory to Accumulator
@@ -58,7 +70,12 @@
 
 0x70    BVS     2   Relative    ;Branch on Overflow Set
 0x71    ADC     2   IndirectY   ;Add Memory to Accumulator
+0x75    ADC     2   ZeroPageX   ;Add Memory to Accumulator
+0x76    ROR     2   ZeroPageX   ;Rotate Right
 0x78    SEI     1               ;Set Interrupt
+0x79    ADC     3   AbsoluteY   ;Add Memory to Accumulator
+0x7D    ADC     3   AbsoluteX   ;Add Memory to Accumulator
+
 0x81    STA     2   IndirectX   ;Store Accumulator in Memory
 0x84    STY     2   ZeroPage    ;Store Y in Memory
 0x85    STA     2   ZeroPage    ;Store Accumulator in Memory
@@ -71,9 +88,13 @@
 
 0x90    BCC     2   Relative    ;Branch on Carry Clear
 0x91    STA     2   IndirectY   ;Store Accumulator
+0x94    STY     2   ZeroPageX   ;Store Y in Memory
+0x95    STA     2   ZeroPageX   ;Store Accumulator
+0x96    STX     2   ZeroPageY   ;Store X in Memory
 0x98    TYA     1               ;Transfer Y to Accumulator
 0x99    STA     2   AbsoluteY   ;Store Accumulator
 0x9A    TXS     1               ;Transfer X to Stack Register
+0x9D    STA     3   AbsoluteX   ;Store Accumulator
 
 0xA0    LDY     2   Immediate   ;Load Y
 0xA1    LDA     2   IndirectX   ;Load A
@@ -89,8 +110,13 @@
 
 0xB0    BCS     2   Relative    ;Branch on Carry Set
 0xB1    LDA     2   IndirectY   ;Load Accumulator with Memory
+0xB4    LDY     2   ZeroPageX   ;Load Y
+0xB5    LDA     2   ZeroPageX   ;Load Accumulator
+0xB6    LDX     2   ZeroPageY   ;Load X
 0xB8    CLV     1               ;Clear Overflow Flag
+0xB9    LDA     3   AbsoluteY   ;Load Accumulator
 0xBA    TSX     1               ;Transfer Stack Pointer to X
+0xBC    LDY     3   AbsoluteX   ;Load Y
 0xBD    LDA     3   AbsoluteX   ;Load Accumulator with Memory
 
 0xC0    CPY     2   Immediate   ;Compare Y with Memory
@@ -106,7 +132,11 @@
 
 0xD0    BNE     2   Relative    ;Branch on Not Zero
 0xD1    CMP     2   IndirectY   ;Compare with Accumulator
+0xD5    CMP     2   ZeroPageX   ;Compare with Accumulator
+0xD6    DEC     2   ZeroPageX   ;Decrement
 0xD8    CLD     1               ;Clear Decimal
+0xD9    CMP     3   AbsoluteY   ;Compare with Accumulator
+0xDD    CMP     3   AbsoluteX   ;Compare with Accumulator
 
 0xE0    CPX     2   Immediate   ;Compare X with Memory
 0xE1    SBC     2   IndirectX   ;Subtract From Accumulator
@@ -122,4 +152,8 @@
 
 0xF0    BEQ     2   Relative    ;Branch on Result Zero
 0xF1    SBC     2   IndirectY   ;Subtract Memory from Accumulator
+0xF5    SBC     2   ZeroPageX   ;Subtract Memory from Accumulator
+0xF6    INC     2   ZeroPageX   ;Increment
 0xF8    SED     1               ;Set Decimal Flag
+0xF9    SBC     3   AbsoluteY   ;Subtract Memory from Accumulator
+0xFD    SBC     3   AbsoluteX   ;Subtract Memory from Accumulator

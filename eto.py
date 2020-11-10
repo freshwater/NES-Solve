@@ -120,7 +120,7 @@ print()
 for i, ((index, op), line_k) in enumerate(zip(log, log_k), 1):
     line_k = line_k.split()
 
-    line = [f'{index:4X}', f'{op["opcode"]:02X}']
+    line = [f'{index:04X}', f'{op["opcode"]:02X}']
 
     if op['byte_count'] > 1:
         line.append(f'{op["data1"]:02X}')
@@ -128,7 +128,7 @@ for i, ((index, op), line_k) in enumerate(zip(log, log_k), 1):
     if op['byte_count'] > 2:
         line.append(f'{op["data2"]:02X}')
 
-    line.append(f'{op["operation"]}')
+    line.append(f'{op["operation"][:3]}')
 
     if False:
         pass
@@ -138,12 +138,35 @@ for i, ((index, op), line_k) in enumerate(zip(log, log_k), 1):
     elif op["opcode"] == 0x24: #BIT
         line.append(f'${op["data"]:02X}')
         line_k = line_k[:5] + line_k[7:]
+    elif op["opcode"] in [0x0A, 0x2A, 0x4A, 0x6A]: # ASL, ROL, LSR, ROR
+        line_k = line_k[:3] + line_k[4:]
     elif op["opcode"] == 0x8E: #STX
         line.append(f'${op["data"]:04X}')
         line_k = line_k[:6] + line_k[8:]
-    elif op["opcode"] == 0xAD: #LDA
+
+    elif op["opcode"] in [0x05, 0x06, 0x25, 0x26, 0x45, 0x46, 0x65, 0x66, 0x84, 0x86, 0xA4,
+                          0xA5, 0xA6, 0xC4, 0xC5, 0xC6, 0xE4, 0xE5, 0xE6]:
+        line.append(f'${op["data"]:02X}')
+        line_k = line_k[:5] + line_k[7:]
+
+    elif op["opcode"] in [0x01, 0x21, 0x41, 0x61, 0x81, 0xC1, 0xE1]:
+        line.append(f'(${op["data"]:02X},X)')
+        line_k = line_k[:5] + line_k[11:]
+
+    elif op["opcode"] in [0x11, 0x31, 0x51, 0x71, 0x91, 0xB1, 0xD1, 0xF1]:
+        line.append(f'(${op["data"]:02X}),Y')
+        line_k = line_k[:5] + line_k[11:]
+
+    elif op["opcode"] in [0x0D, 0x0E, 0x2C, 0x2D, 0x2E, 0x4D, 0x4E, 0x6D, 0x6E, 0x8C, 0x8D,
+                          0xAC, 0xAD, 0xCC, 0xCD, 0xCE, 0xEC, 0xED, 0xEE]:
         line.append(f'${op["data"]:04X}')
         line_k = line_k[:6] + line_k[8:]
+    elif op["opcode"] in [0x6C]:
+        line.append(f'(${op["data"]:04X})')
+        line_k = line_k[:6] + line_k[8:]
+
+    elif op["opcode"] == 0xA1: #LDA
+        line_k = line_k[:4] + line_k[11:]
     elif op["opcode"] == 0xAE: #LDX
         line.append(f'${op["data"]:04X}')
         line_k = line_k[:6] + line_k[8:]

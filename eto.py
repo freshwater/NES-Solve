@@ -31,7 +31,44 @@ indexes = []
 PPU_CONTROL = 0x2000
 PPU_STATUS = 0x2002
 
+timings = 3*np.ones(0x100)
+timings_dict = {
+    2: [
+        0x09, 0x0A, 0x10, 0x18, 0x29, 0x2A, 0x30, 0x38, 0x49, 0x4A, 0x50,
+        0x69, 0x6A, 0x70, 0x78, 0x88, 0x8A, 0x90, 0x98, 0x9A, 0xA0, 0xA2,
+        0xA8, 0xA9, 0xAA, 0xB0, 0xB8, 0xBA, 0xC0, 0xC8, 0xC9, 0xCA, 0xD0,
+        0xD8, 0xE0, 0xE8, 0xE9, 0xEA, 0xF0, 0xF8
+    ],
+    3: [
+        0x05, 0x08, 0x24, 0x25, 0x45, 0x48, 0x4C, 0x65, 0x84, 0x85, 0x86,
+        0xA4, 0xA5, 0xA6, 0xC4, 0xC5, 0xE4, 0xE5
+    ],
+    4: [
+        0x0D, 0x15, 0x19, 0x1D, 0x28, 0x2C, 0x2D, 0x35, 0x39, 0x3D, 0x4D,
+        0x55, 0x59, 0x5D, 0x68, 0x6D, 0x75, 0x79, 0x7D, 0x8C, 0x8D, 0x8E,
+        0x94, 0x95, 0x96, 0xAC, 0xAD, 0xAE, 0xB4, 0xB5, 0xB6, 0xB9, 0xBC,
+        0xBD, 0xCC, 0xCD, 0xD5, 0xD9, 0xDD, 0xEC, 0xED, 0xF5, 0xF9, 0xFD
+    ],
+    5: [
+        0x06, 0x11, 0x26, 0x31, 0x46, 0x51, 0x66, 0x6C, 0x71, 0x99, 0x9D,
+        0xB1, 0xC6, 0xD1, 0xE6, 0xF1
+    ],
+    6: [
+        0x01, 0x0E, 0x16, 0x20, 0x21, 0x2E, 0x36, 0x40, 0x41, 0x4E, 0x56,
+        0x60, 0x61, 0x6E, 0x76, 0x81, 0x91, 0xA1, 0xC1, 0xCE, 0xD6, 0xE1,
+        0xF6, 0xEE
+    ]
+}
+
+dict1 = {}
+for cycle_count, opcodes in timings_dict.items():
+    for instruction in opcodes:
+        timings[instruction] = cycle_count
+        dict1[instruction] = cycle_count
+
 def do(n):
+    cycle = 0
+    countdown = 7
     for _1 in range(999999999):
         for v in range(-1, 261):
             vblank = None
@@ -52,42 +89,52 @@ def do(n):
                 if n == 0:
                     return _1, v, h
 
-                if True or n % 3 == 0:
-                    index = state.program_counter
-                    opcode = increment()
-                    indexes.append(index)
+                cycle += 1
 
-                    sr = state.status_register
+                if cycle % 3 == 0:
+                    countdown -= 1
+                    if countdown == 0:
+                        index = state.program_counter
+                        opcode = increment()
+                        indexes.append(index)
 
-                    operation, byte_count, addressing = instructions[opcode.item()]
-                    visit_data = {'opcode': opcode, 'byte_count': byte_count,
-                                  'operation': operation.__name__, 'addressing': addressing,
-                                  'A': state.A, 'X': state.X, 'Y': state.Y,
-                                  'status_register': state.status_register_byte(),
-                                  'stack_pointer': state.stack_offset}
+                        sr = state.status_register
 
-                    if byte_count == 1:
-                        # here. merge dicts
-                        visit(index, visit_data)
-                        operation(state, 0)
+                        operation, byte_count, addressing = instructions[opcode]
+                        countdown = timings[opcode]
 
-                    elif byte_count == 2:
-                        data = increment()
+                        if not dict1.get(opcode):
+                            print(f'{opcode:02X}')
 
-                        fy = ",y" if addressing == indy else ""
+                        visit_data = {'opcode': opcode, 'byte_count': byte_count,
+                                      'cycle': cycle / 3, 'v': v, 'h': h,
+                                      'operation': operation.__name__, 'addressing': addressing,
+                                      'A': state.A, 'X': state.X, 'Y': state.Y,
+                                      'status_register': state.status_register_byte(),
+                                      'stack_pointer': state.stack_offset}
 
-                        visit(index, visit_data | {'data': data, 'data1': data})
-                        operation(state, addressing(state, data))
+                        if byte_count == 1:
+                            # here. merge dicts
+                            visit(index, visit_data)
+                            operation(state, 0)
 
-                    elif byte_count == 3:
-                        data1, data2 = increment(), increment()
+                        elif byte_count == 2:
+                            data = increment()
 
-                        fy = ",y" if addressing == absy else ""
-                        visit(index, visit_data | {'data': data2*0x0100 + data1, 'data1': data1, 'data2': data2})
-                        operation(state, addressing(state, data1, data2))
+                            fy = ",y" if addressing == indy else ""
 
-                    else:
-                        1 / 0
+                            visit(index, visit_data | {'data': data, 'data1': data})
+                            operation(state, addressing(state, data))
+
+                        elif byte_count == 3:
+                            data1, data2 = increment(), increment()
+
+                            fy = ",y" if addressing == absy else ""
+                            visit(index, visit_data | {'data': data2*0x0100 + data1, 'data1': data1, 'data2': data2})
+                            operation(state, addressing(state, data1, data2))
+
+                        else:
+                            1 / 0
 
 
 #-
@@ -98,7 +145,8 @@ def do(n):
 with open('data/nestest.json', 'rb') as file:
     data = json.loads(file.read())
 
-with open('data/nestest_AXYPSP.log') as file:
+# with open('data/nestest_AXYPSP.log') as file:
+with open('docs/nestest.log') as file:
     log_k = file.readlines()
 
 program_data = np.array(data['Program'], dtype=np.uint8)
@@ -119,6 +167,19 @@ print()
 
 for i, ((index, op), line_k) in enumerate(zip(log, log_k), 1):
     line_k = line_k.split()
+    line_k_s = line_k[line_k.index('PPU:'):]
+    line_k = line_k[:line_k.index('PPU:')]
+
+    if len(line_k_s) == 4:
+        line_k_s = [line_k_s[0], line_k_s[1] + line_k_s[2], line_k_s[3]]
+
+    vs, hs = line_k_s[1].split(',')
+    v, h = int(vs), int(hs)
+
+    cycle = int(line_k_s[-1][4:])
+    print(v, h)
+    print(op['v'], op['h'])
+    print(f'[{cycle}.{op["cycle"]}]:{cycle - op["cycle"]}')
 
     line = [f'{index:04X}', f'{op["opcode"]:02X}']
 

@@ -2,7 +2,9 @@
 import json
 import numpy as np
 
-from operations import *
+# from operations import *
+from system import *
+from instructions import *
 
 
 ##  begin
@@ -140,9 +142,9 @@ def do(n):
 #-
 
 
-# with open('data/g.json', 'rb') as file:
+with open('data/g.json', 'rb') as file:
 # with open('data/full_palette.json', 'rb') as file:
-with open('data/nestest.json', 'rb') as file:
+# with open('data/nestest.json', 'rb') as file:
     data = json.loads(file.read())
 
 # with open('data/nestest_AXYPSP.log') as file:
@@ -165,7 +167,8 @@ print()
 print(_1, v, h)
 print()
 
-for i, ((index, op), line_k) in enumerate(zip(log, log_k), 1):
+# for i, ((index, op), line_k) in enumerate(zip(log, log_k), 1):
+for i, ((index, op), line_k) in enumerate(zip(log, log_k*50), 1):
     line_k = line_k.split()
     line_k_s = line_k[line_k.index('PPU:'):]
     line_k = line_k[:line_k.index('PPU:')]
@@ -177,9 +180,9 @@ for i, ((index, op), line_k) in enumerate(zip(log, log_k), 1):
     v, h = int(vs), int(hs)
 
     cycle = int(line_k_s[-1][4:])
-    print(v, h)
-    print(op['v'], op['h'])
-    print(f'[{cycle}.{op["cycle"]}]:{cycle - op["cycle"]}')
+    # print(v, h)
+    # print(op['v'], op['h'])
+    # print(f'[{cycle}.{op["cycle"]}]:{cycle - op["cycle"]}')
 
     line = [f'{index:04X}', f'{op["opcode"]:02X}']
 
@@ -223,11 +226,12 @@ for i, ((index, op), line_k) in enumerate(zip(log, log_k), 1):
         line.append(f'(${op["data"]:02X},X)')
         line_k = line_k[:5] + line_k[11:]
 
-    elif op["opcode"] in [0x1D, 0x3D, 0x5D, 0x7D, 0x9D, 0xBC, 0xBD, 0xDD, 0xFD]:
+    elif op["opcode"] in [0x1D, 0x1E, 0x3D, 0x3E, 0x5D, 0x5E, 0x7D, 0x7E, 0x9D, 0xBC,
+                          0xBD, 0xDD, 0xDE, 0xFD, 0xFE]:
         line.append(f'${op["data"]:04X},X')
         line_k = line_k[:6] + line_k[10:]
 
-    elif op["opcode"] in [0x19, 0x39, 0x59, 0x79, 0x99, 0xB9, 0xD9, 0xF9]:
+    elif op["opcode"] in [0x19, 0x39, 0x59, 0x79, 0x99, 0xB9, 0xBE, 0xD9, 0xF9]:
         line.append(f'${op["data"]:04X},Y')
         line_k = line_k[:6] + line_k[10:]
 
@@ -235,11 +239,11 @@ for i, ((index, op), line_k) in enumerate(zip(log, log_k), 1):
         line.append(f'(${op["data"]:02X}),Y')
         line_k = line_k[:5] + line_k[11:]
 
-
     elif op["opcode"] in [0x0D, 0x0E, 0x2C, 0x2D, 0x2E, 0x4D, 0x4E, 0x6D, 0x6E, 0x8C, 0x8D,
                           0xAC, 0xAD, 0xCC, 0xCD, 0xCE, 0xEC, 0xED, 0xEE]:
         line.append(f'${op["data"]:04X}')
         line_k = line_k[:6] + line_k[8:]
+
     elif op["opcode"] in [0x6C]:
         line.append(f'(${op["data"]:04X})')
         line_k = line_k[:6] + line_k[8:]
@@ -285,6 +289,9 @@ for i, ((index, op), line_k) in enumerate(zip(log, log_k), 1):
     l1 = ' '.join(line)
     l2 = ' '.join(line_k)
 
+    print('   ', l1)
+    continue
+
     if l1 == l2:
         print('   ', l1)
     else:
@@ -293,56 +300,66 @@ for i, ((index, op), line_k) in enumerate(zip(log, log_k), 1):
         print('k >', l2)
         print()
 
-        exit()
+        # exit()
+        break
 
-## labels = {
-##     "0778": "MIRROR_PPU_CTRL_1",
-##     "2000": "PPU_CTRL_1",
-##     "2001": "PPU_CTRL_2",
-##     "2002": "PPU_STATUS",
-##     "2006": "PPU_ADDRESS",
-##     "2007": "PPU_DATA",
-##     "4014": "SPRITE",
-##     "8082": "NMI",
-##     "809E": "ScreenOff",
-##     "8E92": "WriteBuffer",
-##     "8EDD": "UpdateScreen",
-##     "8EED": "WritePPUReg1",
-##     "90CC": "InitializeMemory",
-## }
-## 
-## labels = {int(key, 16): value for key, value in labels.items()}
-## l = lambda i: f'{labels.get(i, ""):15}'
-## 
-## import sys
-## _1, v, h = do(int(sys.argv[1]))
-## 
-## def r(byte_count, data, addressing):
-##     if data != None:
-##         if byte_count == 1:
-##             return ''
-##         elif byte_count == 2:
-##             if addressing == indy:
-##                 return f'${data:02X},y'
-##             else:
-##                 return f'${data:02X}'
-##         elif byte_count == 3:
-##             return  f'${data:04X} {labels.get(data, "")}'
-##     else:
-##         return ''
-## 
-## b = {'False': " ", '0': '●', '1': '•', '2': '⋅', '3': '⋅'}
-## a = lambda i: b[str((i in indexes[-4:]) and indexes[-4:][::-1].index(i))]
-## ops = sorted(ops.items())
-## print('\n' + '\n'.join([
-##     f'{l(index)}{a(index)}{count:4} {index:02X} {d["opcode"]:02X} {d["operation"]} {r(d["byte_count"], d.get("data"), d["addressing"])}'
-##     for index, (count, d) in ops]) + '\n')
-## 
-## print()
-## # opcode = state.memory[state.program_counter]
-## # print(hex(state.program_counter), state, hex(opcode.item()), opcode.item())
-## print("i", _1, "v", v, "h", h)
-## print()
-## 
-## # print(f":{state['Memory'][0x04A0]:X}")
-## # print(hex(248))
+# exit()
+
+labels = {
+    "0778": "[----MIRROR_PPU_CTRL_1----]",
+    "2000": "[----PPU_CTRL_1----]",
+    "2001": "[----PPU_CTRL_2----]",
+    "2002": "[----PPU_STATUS----]",
+    "2003": "[----SPRITE_ADDRESS----]",
+    "2004": "[----SPRITE_DATA----]",
+    "2005": "[----BACKGROUND_SCROLL----]",
+    "2006": "[----PPU_ADDRESS----]",
+    "2007": "[----PPU_DATA----]",
+    "4014": "[----SPRITE_DMA----]",
+    "8082": "NMI",
+    "809E": "ScreenOff",
+    "8E92": "WriteBuffer",
+    "8EDD": "UpdateScreen",
+    "8EED": "WritePPUReg1",
+    "90CC": "InitializeMemory",
+}
+
+# 0x0000-0x1FFF pattern memory
+# 0x2000-0x3EFF nametable vram
+# 0x3F00-0x3FFF palette memory
+
+labels = {int(key, 16): value for key, value in labels.items()}
+l = lambda i: f'{labels.get(i, ""):15}'
+
+import sys
+# _1, v, h = do(int(sys.argv[1]))
+
+def r(byte_count, data, addressing):
+    if data != None:
+        if byte_count == 1:
+            return ''
+        elif byte_count == 2:
+            if addressing == indy:
+                return f'${data:02X},y'
+            else:
+                return f'${data:02X}'
+        elif byte_count == 3:
+            return  f'${data:04X} {labels.get(data, "")}'
+    else:
+        return ''
+
+b = {'False': " ", '0': '●', '1': '•', '2': '⋅', '3': '⋅'}
+a = lambda i: b[str((i in indexes[-4:]) and indexes[-4:][::-1].index(i))]
+ops = sorted(ops.items())
+print('\n' + '\n'.join([
+    f'{l(index)}{a(index)}{count:4} {index:02X} {d["opcode"]:02X} {d["operation"]} {r(d["byte_count"], d.get("data"), d["addressing"])}'
+    for index, (count, d) in ops]) + '\n')
+
+print()
+# opcode = state.memory[state.program_counter]
+# print(hex(state.program_counter), state, hex(opcode.item()), opcode.item())
+print("i", _1, "v", v, "h", h)
+print()
+
+# print(f":{state['Memory'][0x04A0]:X}")
+# print(hex(248))

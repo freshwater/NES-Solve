@@ -1,6 +1,8 @@
 
 import numpy as np
+from behaviors import Behaviors
 
+#-
 
 def byte(data):
     return data & 0x00FF
@@ -11,47 +13,48 @@ STACK_ZERO = 0x0100
 
 #-
 
-_ = lambda x: x
+def _(state, _data1, _data2):
+    pass
 
-def imm(state, data):
-    return data
+def imm(state, data1, _data2):
+    return data1
 
 def imm2(state, data1, data2):
     return data2*0x0100 + data1
 
-def zpg(state, data):
-    return state.memory[data]
+def zpg(state, data1, _data2):
+    return state.memory[data1]
 
-def indx(state, data):
-    L = state.memory[byte(data + state.X)]
-    H = state.memory[byte(data + state.X + 1)]
+def indx(state, data1, _data2):
+    L = state.memory[byte(data1 + state.X)]
+    H = state.memory[byte(data1 + state.X + 1)]
     address = H*0x0100 + L
     return state.memory[address]
 
-def indx_write(state, data):
-    L = state.memory[byte(data + state.X)]
-    H = state.memory[byte(data + state.X + 1)]
+def indx_write(state, data1, _data2):
+    L = state.memory[byte(data1 + state.X)]
+    H = state.memory[byte(data1 + state.X + 1)]
     return H*0x0100 + L
 
-def zpgx_read(state, data):
-    return state.memory[data + state.X]
+def zpgx_read(state, data1, _data2):
+    return state.memory[data1 + state.X]
 
-def zpgx_write(state, data):
-    return data + state.X
+def zpgx_write(state, data1, _data2):
+    return data1 + state.X
 
-def zpgy_read(state, data):
-    return state.memory[data + state.Y]
+def zpgy_read(state, data1, _data2):
+    return state.memory[data1 + state.Y]
 
-def zpgy_write(state, data):
-    return data + state.Y
+def zpgy_write(state, data1, _data2):
+    return data1 + state.Y
 
-def indy(state, data):
+def indy(state, data1, _data2):
     # check
-    address = state.memory[data+1]*0x0100 + state.memory[data]
+    address = state.memory[data1+1]*0x0100 + state.memory[data1]
     return address + state.Y
 
-def indy_read(state, data):
-    address = state.memory[byte(data+1)]*0x0100 + state.memory[data]
+def indy_read(state, data1, _data2):
+    address = state.memory[byte(data1+1)]*0x0100 + state.memory[data1]
     return state.memory[address + state.Y]
 
 def ind(state, data1, data2):
@@ -91,7 +94,19 @@ def SEC(state, a) -> [(0x38, _)]: state.status_register['Carry'] = 1
 def CLC(state, a) -> [(0x18, _)]: state.status_register['Carry'] = 0
 def SED(state, a) -> [(0xF8, _)]: state.status_register['Decimal'] = 1
 def CLV(state, a) -> [(0xB8, _)]: state.status_register['Overflow'] = 0
-def NOP(state, a) -> [(0xEA, _)]: pass
+def NOP(state, a) -> [(0x1A, _), (0x3A, _), (0x5A, _),
+                      (0x7A, _), (0xDA, _), (0xFA, _),
+
+                      (0x04, imm), (0x14, imm), (0x34, imm),
+                      (0x44, imm), (0x54, imm), (0x64, imm),
+                      (0x80, imm),
+                      (0x74, imm), (0xD4, imm), (0xF4, imm),
+
+                      (0x0C, imm2), (0x1C, imm2), (0x3C, imm2),
+                      (0x5C, imm2), (0x7C, imm2), (0xDC, imm2),
+                      (0xFC, imm2),
+
+                      (0xEA, _)]: pass
 
 def Z_set(state, value):
     state.status_register['Zero'] = 1*(value == 0)

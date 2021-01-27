@@ -3,21 +3,24 @@
 0x00    BRK     1               ;Force Break
 0x01    ORA     2   Indirect    ;Or with Accumulator
 0x02    RTS     1               ;Return from Subroutine
-0x04
+0x04   *NOP     2               ;No Operation
 0x05    ORA     2   ZeroPage    ;Or with Accumulator
 0x06    ASL     2   ZeroPage    ;Shift Left
 0x08    PHP     1               ;Push Processor Status onto Stack
 0x09    ORA     2   Immediate   ;Or with Accumulator
 0x0A    ASL     1               ;Shift Left Accumulator
-0x0C    
+0x0C   *NOP     3               ;No Operation
 0x0E    ASL     1   Absolute    ;Shift Left
 
 0x10    BPL     2   Relative    ;Branch on Plus
 0x11    ORA     2   IndirectY   ;Or with Accumulator
+0x14   *NOP     2               ;No Operation
 0x15    ORA     2   ZeroPageX   ;Or with Accumulator
 0x16    ASL     2   ZeroPageX   ;Shift Left
 0x18    CLC     1               ;Clear Carry Flag
 0x19    ORA     3   AbsoluteY   ;Or with Accumulator
+0x1A   *NOP     1               ;No Operation
+0x1C   *NOP     3               ;No Operation
 0x1D    ORA     3   AbsoluteX   ;Or with Accumulator
 0x1E    ASL     3   AbsoluteX   ;Shift Left
 
@@ -34,16 +37,19 @@
 
 0x30    BMI     2   Relative    ;Branch on Result Minus
 0x31    AND     2   IndirectY   ;And with Accumulator
+0x34   *NOP     2               ;No Operation
 0x35    AND     2   ZeroPageX   ;And with Accumulator
 0x36    ROL     2   ZeroPageX   ;Rotate Left
 0x38    SEC     1               ;Set Carry Flag
 0x39    AND     3   AbsoluteY   ;And with Accumulator
+0x3A   *NOP     1               ;No Operation
+0x3C   *NOP     3               ;No Operation
 0x3D    AND     3   AbsoluteX   ;And with Accumulator
 0x3E    ROL     3   AbsoluteX   ;Rotate Left
 
 0x40    RTI     1               ;Return from Interrupt
 0x41    EOR     2   Indirect    ;Exclusive Or with Accumulator
-0x44
+0x44   *NOP     2               ;No Operation
 0x45    EOR     2   ZeroPage    ;Exclusive Or with Accumulator
 0x46    LSR     2   ZeroPage    ;Shift Right 
 0x48    PHA     1               ;Push Accumulator onto Stack
@@ -55,13 +61,17 @@
 
 0x50    BVC     2   Relative    ;Branch on Overflow Clear
 0x51    EOR     2   IndirectY   ;Exclusive Or with Accumulator
+0x54   *NOP     2               ;No Operation
 0x55    EOR     2   ZeroPageX   ;Exclusive Or with Accumulator
 0x56    LSR     2   ZeroPageX   ;Shift Right
 0x59    EOR     3   AbsoluteY   ;Exclusive Or with Accumulator
+0x5A   *NOP     1               ;No Operation
+0x5C   *NOP     3               ;No Operation
 0x5D    EOR     3   AbsoluteX   ;Exclusive Or with Accumulator
 0x5E    LSR     3   AbsoluteX   ;Shift Right
 
 0x61    ADC     2   IndirectX   ;Add Memory to Accumulator
+0x64   *NOP     2               ;No Operation
 0x65    ADC     2   ZeroPage    ;Add Memory to Accumulator
 0x66    ROR     2   ZeroPage    ;Rotate Right
 0x68    PLA     1               ;Pull Accumulator from Stack
@@ -73,13 +83,17 @@
 
 0x70    BVS     2   Relative    ;Branch on Overflow Set
 0x71    ADC     2   IndirectY   ;Add Memory to Accumulator
+0x74   *NOP     2               ;No Operation
 0x75    ADC     2   ZeroPageX   ;Add Memory to Accumulator
 0x76    ROR     2   ZeroPageX   ;Rotate Right
 0x78    SEI     1               ;Set Interrupt
 0x79    ADC     3   AbsoluteY   ;Add Memory to Accumulator
+0x7A   *NOP     1               ;No Operation
+0x7C   *NOP     3               ;No Operation
 0x7D    ADC     3   AbsoluteX   ;Add Memory to Accumulator
 0x7E    ROR     3   AbsoluteX   ;Rotate Right
 
+0x80   *NOP     2               ;No Operation
 0x81    STA     2   IndirectX   ;Store Accumulator in Memory
 0x84    STY     2   ZeroPage    ;Store Y in Memory
 0x85    STA     2   ZeroPage    ;Store Accumulator in Memory
@@ -137,10 +151,13 @@
 
 0xD0    BNE     2   Relative    ;Branch on Not Zero
 0xD1    CMP     2   IndirectY   ;Compare with Accumulator
+0xD4   *NOP     2               ;No Operation
 0xD5    CMP     2   ZeroPageX   ;Compare with Accumulator
 0xD6    DEC     2   ZeroPageX   ;Decrement
 0xD8    CLD     1               ;Clear Decimal
 0xD9    CMP     3   AbsoluteY   ;Compare with Accumulator
+0xDA   *NOP     1               ;No Operation
+0xDC   *NOP     3               ;No Operation
 0xDD    CMP     3   AbsoluteX   ;Compare with Accumulator
 0xDE    DEC     3   AbsoluteX   ;Decrement
 
@@ -158,9 +175,12 @@
 
 0xF0    BEQ     2   Relative    ;Branch on Result Zero
 0xF1    SBC     2   IndirectY   ;Subtract Memory from Accumulator
+0xF4   *NOP     2               ;No Operation
 0xF5    SBC     2   ZeroPageX   ;Subtract Memory from Accumulator
 0xF6    INC     2   ZeroPageX   ;Increment
 0xF8    SED     1               ;Set Decimal Flag
 0xF9    SBC     3   AbsoluteY   ;Subtract Memory from Accumulator
+0xFA   *NOP     1               ;No Operation
+0xFC   *NOP     3               ;No Operation
 0xFD    SBC     3   AbsoluteX   ;Subtract Memory from Accumulator
 0xFE    INC     3   AbsoluteX   ;Increment

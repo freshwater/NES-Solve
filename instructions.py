@@ -48,6 +48,12 @@ def zpgy_read(state, data1, _data2):
 def zpgy_write(state, data1, _data2):
     return data1 + state.Y
 
+def zpg_write(state, data1, _data2):
+    return data1
+
+def abs_write(state, data1, data2):
+    return data2*0x0100 + data1
+
 def indy(state, data1, _data2):
     # check
     address = state.memory[data1+1]*0x0100 + state.memory[data1]
@@ -124,6 +130,13 @@ def INY(state, a) -> [(0xC8, _)]: state.Y = byte(state.Y + 1); Z_set(state, stat
 def INC(state, a) -> [(0xE6, imm), (0xEE, imm2), (0xF6, zpgx_write), (0xFE, absx_write)]: state.memory[a] += 1; Z_set(state, state.memory[a]); N_set(state, state.memory[a])
 def INX(state, a) -> [(0xE8, _)]: state.X = byte(state.X + 1); Z_set(state, state.X); N_set(state, state.X)
 
+def LAX(state, a) -> [(0xA3, indx), (0xA7, zpg), (0xAF, abs_read), (0xB3, indy_read), (0xB7, zpgy_read), (0xBF, absy)]:
+    LDA(state, a)
+    TAX(state, a)
+
+def SAX(state, a) -> [(0x83, indx_write), (0x87, zpg_write), (0x8F, abs_write), (0x97, zpgy_write)]:
+    state.memory[a] = state.A & state.X
+
 def DEC_zpg(state, a) -> [(0xC6, imm), (0xCE, imm2), (0xD6, zpgx_write), (0xDE, absx_write)]:
     state.memory[a] -= 1
     Z_set(state, state.memory[a])
@@ -199,7 +212,7 @@ def LSR_zpg(state, a) -> [(0x46, imm), (0x4E, imm2), (0x56, zpgx_write), (0x5E, 
 
     Z_set(state, result)
     N_set(state, result)
-    state.status_register['Carry'] = state.A & 0x01
+    state.status_register['Carry'] = state.memory[a] & 0x01
 
     state.memory[a] = result
 
@@ -263,7 +276,8 @@ def ADC(state, a) -> [(0x61, indx), (0x65, zpg), (0x69, imm), (0x6D, abs_read), 
 
     state.A = byte(result)
 
-def SBC(state, a) -> [(0xE1, indx), (0xE5, zpg), (0xE9, imm), (0xED, abs_read), (0xF1, indy_read), (0xF5, zpgx_read), (0xF9, absy), (0xFD, absx_read)]:
+def SBC(state, a) -> [(0xE1, indx), (0xE5, zpg), (0xE9, imm), (0xEB, imm), (0xED, abs_read),
+                      (0xF1, indy_read), (0xF5, zpgx_read), (0xF9, absy), (0xFD, absx_read)]:
     a ^= 0xFF
     result = state.A + a + state.status_register['Carry']
 
@@ -275,6 +289,36 @@ def SBC(state, a) -> [(0xE1, indx), (0xE5, zpg), (0xE9, imm), (0xED, abs_read), 
     state.status_register['Overflow'] = 1*(v1 > 0)
 
     state.A = byte(result)
+
+def DCP(state, a) -> [(0xC3, indx_write), (0xC7, zpg_write), (0xCF, abs_write), (0xD3, indy), (0xD7, zpgx_write),
+                      (0xDB, absy_write), (0xDF, absx_write)]:
+    DEC_zpg(state, a)
+    CMP(state, state.memory[a])
+
+def ISB(state, a) -> [(0xE3, indx_write), (0xE7, zpg_write), (0xEF, abs_write), (0xF3, indy), (0xF7, zpgx_write),
+                      (0xFB, absy_write), (0xFF, absx_write)]:
+    INC(state, a)
+    SBC(state, state.memory[a])
+
+def SLO(state, a) -> [(0x03, indx_write), (0x07, zpg_write), (0x0F, abs_write), (0x13, indy), (0x17, zpgx_write),
+                      (0x1B, absy_write), (0x1F, absx_write)]:
+    ASL_zpg(state, a)
+    ORA(state, state.memory[a])
+
+def RLA(state, a) -> [(0x23, indx_write), (0x27, zpg_write), (0x2F, abs_write), (0x33, indy), (0x37, zpgx_write),
+                      (0x3B, absy_write), (0x3F, absx_write)]:
+    ROL_zpg(state, a)
+    AND(state, state.memory[a])
+
+def SRE(state, a) -> [(0x43, indx_write), (0x47, zpg_write), (0x4F, abs_write), (0x53, indy), (0x57, zpgx_write),
+                      (0x5B, absy_write), (0x5F, absx_write)]:
+    LSR_zpg(state, a)
+    EOR(state, state.memory[a])
+
+def RRA(state, a) -> [(0x63, indx_write)]:
+    assert False, False
+    ROR_zpg(state, a)
+    ADC(state, state.memory[a])
 
 def STA(state, a) -> [(0x81, indx_write), (0x8D, imm2), (0x85, imm), (0x91, indy), (0x95, zpgx_write), (0x99, absy_write), (0x9D, absx_write)]:
     state.memory[a] = state.A
@@ -417,8 +461,8 @@ def PLP(state, a) -> [(0x28, _)]:
 
 
 instructions = {}
-byte_counts = {_: 1, imm: 2, imm2: 3, zpg: 2, zpgx_read: 2, zpgx_write: 2, zpgy_read: 2, zpgy_write: 2, abs_read: 3,
-               absx_read: 3, absx_write: 3, indx: 2, indx_write: 2, indy: 2, indy_read: 2, ind: 3, absy: 3, absy_write: 3}
+byte_counts = {_: 1, imm: 2, imm2: 3, zpg: 2, zpg_write: 2, zpgx_read: 2, zpgx_write: 2, zpgy_read: 2, zpgy_write: 2, abs_read: 3,
+               abs_write: 3, absx_read: 3, absx_write: 3, indx: 2, indx_write: 2, indy: 2, indy_read: 2, ind: 3, absy: 3, absy_write: 3}
 for name, func in locals().copy().items():
     if settings := hasattr(func, '__annotations__') and func.__annotations__.get('return'):
         for opcode, addressing in settings:

@@ -5,6 +5,10 @@ import instructions
 
 import sys
 
+"""
+python -W ignore nestest.py data/nestest.json data/nestest.log 76_200
+"""
+
 file_name = sys.argv[1]
 log_name = sys.argv[2]
 cycles_max = int(sys.argv[3])

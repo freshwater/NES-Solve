@@ -3,74 +3,96 @@
 0x00    BRK     1               ;Force Break
 0x01    ORA     2   Indirect    ;Or with Accumulator
 0x02    RTS     1               ;Return from Subroutine
+0x03   *SLO     2   IndirectX   ;Shift Left then Or with A
 0x04   *NOP     2               ;No Operation
 0x05    ORA     2   ZeroPage    ;Or with Accumulator
 0x06    ASL     2   ZeroPage    ;Shift Left
+0x07   *SLO     2   ZeroPage    ;Shift Left then Or with A
 0x08    PHP     1               ;Push Processor Status onto Stack
 0x09    ORA     2   Immediate   ;Or with Accumulator
 0x0A    ASL     1               ;Shift Left Accumulator
 0x0C   *NOP     3               ;No Operation
-0x0E    ASL     1   Absolute    ;Shift Left
+0x0E    ASL     3   Absolute    ;Shift Left
+0x0F   *SLO     3   Absolute    ;Shift Left then Or with A
 
 0x10    BPL     2   Relative    ;Branch on Plus
 0x11    ORA     2   IndirectY   ;Or with Accumulator
+0x13   *SLO     2   IndirectY   ;Shift Left then Or with A
 0x14   *NOP     2               ;No Operation
 0x15    ORA     2   ZeroPageX   ;Or with Accumulator
 0x16    ASL     2   ZeroPageX   ;Shift Left
+0x17   *SLO     2   ZeroPageX   ;Shift Left then Or with A
 0x18    CLC     1               ;Clear Carry Flag
 0x19    ORA     3   AbsoluteY   ;Or with Accumulator
 0x1A   *NOP     1               ;No Operation
+0x1B   *SLO     3   AbsoluteY   ;Shift Left then Or with A
 0x1C   *NOP     3               ;No Operation
 0x1D    ORA     3   AbsoluteX   ;Or with Accumulator
 0x1E    ASL     3   AbsoluteX   ;Shift Left
+0x1F   *SLO     3   AbsoluteX   ;Shift Left then Or with A
 
 0x20    JSR     3   Absolute    ;Jump to Subroutine
 0x21    AND     2   IndirectX   ;And with Accumulator
+0x23   *RLA     2   IndirectX   ;Rotate Left then And with A
 0x24    BIT     2   ZeroPage    ;Bit test Memory with Accumulator
 0x25    AND     2   ZeroPage    ;And with Accumulator
 0x26    ROL     2   ZeroPage    ;Rotate Left
+0x27   *RLA     2   ZeroPage    ;Rotate Left then And with A
 0x28    PLP     1               ;Pull Processor Status from stack
 0x29    AND     2   Immediate   ;And
 0x2C    BIT     3   Immediate   ;Bit test with Accumulator
 0x2D    AND     3   Absolute    ;And with Accumulator
 0x2E    ROL     3   Absolute    ;Rotate Left
+0x2F   *RLA     3   Absolute    ;Rotate Left then And with A
 
 0x30    BMI     2   Relative    ;Branch on Result Minus
 0x31    AND     2   IndirectY   ;And with Accumulator
+0x33   *RLA     2   IndirectY   ;Rotate Left then And with A
 0x34   *NOP     2               ;No Operation
 0x35    AND     2   ZeroPageX   ;And with Accumulator
 0x36    ROL     2   ZeroPageX   ;Rotate Left
+0x37   *RLA     2   ZeroPageX   ;Rotate Left then And with A
 0x38    SEC     1               ;Set Carry Flag
 0x39    AND     3   AbsoluteY   ;And with Accumulator
 0x3A   *NOP     1               ;No Operation
+0x3B   *RLA     3   AbsoluteY   ;Rotate Left then And with A
 0x3C   *NOP     3               ;No Operation
 0x3D    AND     3   AbsoluteX   ;And with Accumulator
 0x3E    ROL     3   AbsoluteX   ;Rotate Left
+0x3F   *RLA     3   AbsoluteX   ;Rotatel Left then And with A
 
 0x40    RTI     1               ;Return from Interrupt
 0x41    EOR     2   Indirect    ;Exclusive Or with Accumulator
+0x43   *SRE     2   IndirectX   ;Shift Right then Exclusive Or with A
 0x44   *NOP     2               ;No Operation
 0x45    EOR     2   ZeroPage    ;Exclusive Or with Accumulator
 0x46    LSR     2   ZeroPage    ;Shift Right 
+0x47   *SRE     2   ZeroPage    ;Shift Right then Exclusive Or with A
 0x48    PHA     1               ;Push Accumulator onto Stack
 0x49    EOR     2   Immediate   ;Exclusive Or with Accumulator
 0x4A    LSR     1               ;Shift Right Accumulator
 0x4C    JMP     3   Absolute    ;Jump
 0x4D    EOR     3   Absolute    ;Exclusive Or with Accumulator
 0x4E    LSR     3   Absolute    ;Shift Right
+0x4F   *SRE     3   Absolute    ;Shift Right then Exclusive Or with A
 
 0x50    BVC     2   Relative    ;Branch on Overflow Clear
 0x51    EOR     2   IndirectY   ;Exclusive Or with Accumulator
+0x53   *SRE     2   IndirectY   ;Shift Right then Exclusive Or with A
 0x54   *NOP     2               ;No Operation
 0x55    EOR     2   ZeroPageX   ;Exclusive Or with Accumulator
 0x56    LSR     2   ZeroPageX   ;Shift Right
+0x57   *SRE     2   ZeroPageX   ;Shift Right then Exclusive Or with A
 0x59    EOR     3   AbsoluteY   ;Exclusive Or with Accumulator
 0x5A   *NOP     1               ;No Operation
+0x5B   *SRE     3   AbsoluteY   ;Shift Right then Exclusive Or with A
 0x5C   *NOP     3               ;No Operation
 0x5D    EOR     3   AbsoluteX   ;Exclusive Or with Accumulator
 0x5E    LSR     3   AbsoluteX   ;Shift Right
+0x5F   *SRE     3   AbsoluteX   ;Shift Right then Exclusive Or with A
 
 0x61    ADC     2   IndirectX   ;Add Memory to Accumulator
+0x63   *RRA     2   IndirectX   ;Shift Right
 0x64   *NOP     2               ;No Operation
 0x65    ADC     2   ZeroPage    ;Add Memory to Accumulator
 0x66    ROR     2   ZeroPage    ;Rotate Right
@@ -95,20 +117,24 @@
 
 0x80   *NOP     2               ;No Operation
 0x81    STA     2   IndirectX   ;Store Accumulator in Memory
+0x83   *SAX     2   IndirectX   ;Store And of A and X in Memory
 0x84    STY     2   ZeroPage    ;Store Y in Memory
 0x85    STA     2   ZeroPage    ;Store Accumulator in Memory
 0x86    STX     2   ZeroPage    ;Store X in Memory
+0x87   *SAX     2   ZeroPage    ;Store And of A and X in Memory
 0x88    DEY     1               ;Decrement Y
 0x8A    TXA     1               ;Transfer X to Accumulator
 0x8C    STY     3   Absolute    ;Store Y in Memory
 0x8D    STA     3   Immediate   ;Store Accumulator in Memory
 0x8E    STX     1               ;Store X in Memory
+0x8F   *SAX     3   Absolute    ;Store And of A and X in Memory
 
 0x90    BCC     2   Relative    ;Branch on Carry Clear
 0x91    STA     2   IndirectY   ;Store Accumulator
 0x94    STY     2   ZeroPageX   ;Store Y in Memory
 0x95    STA     2   ZeroPageX   ;Store Accumulator
 0x96    STX     2   ZeroPageY   ;Store X in Memory
+0x97   *SAX     2   ZeroPageY   ;Store And of A and X in Memory
 0x98    TYA     1               ;Transfer Y to Accumulator
 0x99    STA     2   AbsoluteY   ;Store Accumulator
 0x9A    TXS     1               ;Transfer X to Stack Register
@@ -117,70 +143,90 @@
 0xA0    LDY     2   Immediate   ;Load Y
 0xA1    LDA     2   IndirectX   ;Load A
 0xA2    LDX     2   Immediate   ;Load X
+0xA3   *LAX     2   IndirectX   ;Load A then Transfer A to X
 0xA5    LDA     2   ZeroPage    ;Load Accumulator
 0xA6    LDX     2   ZeroPage    ;Load X
+0xA7   *LAX     2   ZeroPage    ;Load A then Transfer A to X
 0xA8    TAY     1               ;Transfer Accumulator to Y
 0xA9    LDA     2   Immediate   ;Load Accumulator
 0xAA    TAX     1               ;Transfer Accumulator to X
 0xAC    LDY     3   Absolute    ;Load Y
 0xAD    LDA     3   Absolute    ;Load Accumulator with Memory
 0xAE    LDX     3   Absolute    ;Load X with Memory
+0xAF   *LAX     3   Absolute    ;Load A then Transfer A to X
 
 0xB0    BCS     2   Relative    ;Branch on Carry Set
 0xB1    LDA     2   IndirectY   ;Load Accumulator
+0xB3   *LAX     2   IndirectY   ;Load A then Transfer A to X
 0xB4    LDY     2   ZeroPageX   ;Load Y
 0xB5    LDA     2   ZeroPageX   ;Load Accumulator
 0xB6    LDX     2   ZeroPageY   ;Load X
+0xB7   *LAX     2   ZeroPageY   ;Load A then Transfer A to X
 0xB8    CLV     1               ;Clear Overflow Flag
 0xB9    LDA     3   AbsoluteY   ;Load Accumulator
 0xBA    TSX     1               ;Transfer Stack Pointer to X
 0xBC    LDY     3   AbsoluteX   ;Load Y
 0xBD    LDA     3   AbsoluteX   ;Load Accumulator
 0xBE    LDX     3   AbsoluteY   ;Load X
+0xBF    LAX     3   AbsoluteY   ;Load A then Transfer A to X
 
 0xC0    CPY     2   Immediate   ;Compare Y with Memory
 0xC1    CMP     2   IndirectX   ;Compare with Accumulator
+0xC3   *DCP     2   IndirectX   ;Decrement Memory then Compare with A
 0xC5    CMP     2   ZeroPage    ;Compare with Accumulator
 0xC6    DEC     2   ZeroPage    ;Decrement Memory
+0xC7   *DCP     2   ZeroPage    ;Decrement Memory then Compare with A
 0xC8    INY     1               ;Increment Y
 0xC9    CMP     2   Immediate   ;Compare with Accumulator
 0xCA    DEX     1               ;Decrement X
 0xCC    CPY     3   Absolute    ;Compare Y with Memory
 0xCD    CMP     3   Absolute    ;Compare with Accumulator
 0xCE    DEC     3   Absolute    ;Decrement Memory
+0xCF   *DCP     3   Absolute    ;Decrement Memory then Compare with A
 
 0xD0    BNE     2   Relative    ;Branch on Not Zero
 0xD1    CMP     2   IndirectY   ;Compare with Accumulator
 0xD4   *NOP     2               ;No Operation
 0xD5    CMP     2   ZeroPageX   ;Compare with Accumulator
 0xD6    DEC     2   ZeroPageX   ;Decrement
+0xD7   *DCP     2   ZeroPageX   ;Decrement Memory then Compare with A
 0xD8    CLD     1               ;Clear Decimal
 0xD9    CMP     3   AbsoluteY   ;Compare with Accumulator
 0xDA   *NOP     1               ;No Operation
+0xDB   *DCP     3   AbsoluteY   ;Decrement Memory then Compare with A
 0xDC   *NOP     3               ;No Operation
 0xDD    CMP     3   AbsoluteX   ;Compare with Accumulator
 0xDE    DEC     3   AbsoluteX   ;Decrement
+0xDF   *DCP     3   AbsoluteX   ;Decrement Memory then Compare with A
 
 0xE0    CPX     2   Immediate   ;Compare X with Memory
 0xE1    SBC     2   IndirectX   ;Subtract From Accumulator
+0xE3   *ISB     2   IndirectX   ;Increment Memory then Subtract from A
 0xE4    CPX     2   ZeroPage    ;Compare Memory with X
 0xE5    SBC     2   ZeroPage    ;Subtract From Accumulator
 0xE6    INC     2   ZeroPage    ;Increment Memory
+0xE7   *ISB     2   ZeroPage    ;Increment Memory then Subtract from A
 0xE8    INX     1               ;Increment X
 0xE9    SBC     2   Immediate   ;Subtract Memory from Accumulator
 0xEA    NOP     1               ;No Operation
+0xEB   *SBC     2   Immediate   ;Subtract from Accumulator
 0xEC    CPX     3   Absolute    ;Compare X with Memory
 0xED    SBC     3   Absolute    ;Subtract Memory from Accumulator
 0xEE    INC     3   Absolute    ;Increment Memory
+0xEF   *SBC     3   Absolute    ;Increment Memory then Subtract from A
 
 0xF0    BEQ     2   Relative    ;Branch on Result Zero
 0xF1    SBC     2   IndirectY   ;Subtract Memory from Accumulator
+0xF3   *ISB     2   IndirectY   ;Increment Memory then Subtract from A
 0xF4   *NOP     2               ;No Operation
 0xF5    SBC     2   ZeroPageX   ;Subtract Memory from Accumulator
 0xF6    INC     2   ZeroPageX   ;Increment
+0xF7   *ISB     2   ZeroPageX   ;Increment Memory then Subtract from A
 0xF8    SED     1               ;Set Decimal Flag
 0xF9    SBC     3   AbsoluteY   ;Subtract Memory from Accumulator
 0xFA   *NOP     1               ;No Operation
+0xFB   *ISB     3   AbsoluteY   ;Increment Memory then Subtract from A
 0xFC   *NOP     3               ;No Operation
 0xFD    SBC     3   AbsoluteX   ;Subtract Memory from Accumulator
 0xFE    INC     3   AbsoluteX   ;Increment
+0xFF   *ISB     3   AbsoluteX   ;Increment Memory then Subtract from A

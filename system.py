@@ -101,7 +101,10 @@ class State:
             code += f' {self.last_executed_data2:02X}'
 
         instruction = instructions.instructions[self.last_executed_opcode]
-        code += f' {instruction[0].__name__[:3]}'
+        condition1 = instruction[0].__name__ in ['LAX', 'SAX', 'DCP', 'ISB', 'SLO', 'RLA', 'SRE', 'RRA']
+        condition2 = self.last_executed_opcode in [0x04, 0x0C, 0x44, 0x64, 0xEB]
+        prefix = '*' if condition1 or condition2 else ''
+        code += f' {prefix}{instruction[0].__name__[:3]}'
 
         data = State.instruction_format(self.last_executed_opcode,
                                         self.last_executed_data1,
@@ -122,26 +125,46 @@ class State:
 
     def instruction_format(opcode, data1, data2, program_counter):
         byte_count = 1 + (data1 != None) + (data2 != None)
+        addressing = instructions.instructions[opcode][2]
 
-        if opcode in [0x15, 0x16, 0x35, 0x36, 0x55, 0x56, 0x75, 0x76,
-                      0x94, 0x95, 0xB4, 0xB5, 0xD5, 0xD6, 0xF5, 0xF6]:
+        if opcode in [0x5B, 0x5F, 0x63, 0xA3, 0xA7, 0xAF, 0xB3]:
+            if addressing == instructions.absx_write:
+                return f'${data2*0x0100 + data1:04X},X'
+            elif addressing in [instructions.indx, instructions.indx_write]:
+                return f'(${data1:02X},X)'
+            elif addressing == instructions.indy_read:
+                return f'(${data1:02X}),Y'
+            elif addressing == instructions.zpg:
+                return f'${data1:02X}'
+            elif addressing == instructions.absy_write:
+                return f'${data2*0x0100 + data1:04X},Y'
+            elif addressing == instructions.abs_read:
+                return f'${data2*0x0100 + data1:04X}'
+            else:
+                return "NOPEOUEU"
+        elif opcode in [0x15, 0x16, 0x17, 0x35, 0x36, 0x37, 0x55, 0x57, 0x56, 0x75, 0x76,
+                        0x94, 0x95, 0xB4, 0xB5, 0xD5, 0xD6, 0xD7, 0xF5, 0xF6, 0xF7]:
             return f'${data1:02X},X'
-        elif opcode in [0x1D, 0x1E, 0x3D, 0x3E, 0x5D, 0x5E, 0x7D, 0x7E, 0x9D, 0xBC,
-                        0xBD, 0xDD, 0xDE, 0xFD, 0xFE]:
+        elif opcode in [0x1D, 0x1E, 0x1F, 0x3D, 0x3E, 0x3F, 0x5D, 0x5E, 0x7D, 0x7E, 0x9D, 0xBC,
+                        0xBD, 0xDD, 0xDE, 0xDF, 0xFD, 0xFE, 0xFF]:
             return f'${data2*0x0100 + data1:04X},X'
-        elif opcode in [0x01, 0x21, 0x41, 0x61, 0x81, 0xA1, 0xC1, 0xE1]:
+        elif opcode in [0x01, 0x03, 0x21, 0x23, 0x41, 0x43, 0x61, 0x81, 0xA1, 0xC1, 0xE1,
+                        0x83, 0xC3, 0xE3]:
             return f'(${data1:02X},X)'
         elif opcode in [0x10, 0x30, 0x50, 0x70, 0x90, 0xB0, 0xD0, 0xF0]:
             return f'${program_counter + 2 + np.int8(data1):04X}'
-        elif opcode in [0x11, 0x31, 0x51, 0x71, 0x91, 0xB1, 0xD1, 0xF1]:
+        elif opcode in [0x11, 0x13, 0x31, 0x33, 0x51, 0x53, 0x71, 0x91, 0xB1, 0xD1, 0xF1,
+                        0xD3, 0xF3]:
             return f'(${data1:02X}),Y'
-        elif opcode in [0x19, 0x39, 0x59, 0x79, 0x99, 0xB9, 0xBE, 0xD9, 0xF9]:
+        elif opcode in [0x19, 0x1B, 0x39, 0x3B, 0x59, 0x79, 0x99, 0xB9, 0xBE, 0xD9, 0xF9,
+                        0xBF, 0xDB, 0xFB]:
             return f'${data2*0x0100 + data1:04X},Y'
         elif opcode == 0x6C:
             return f'(${data2*0x0100 + data1:04X})'
-        elif opcode in [0x96, 0xB6]:
+        elif opcode in [0x96, 0xB6, 0xB7, 0x97]:
             return f'${data1:02X},Y'
-        elif opcode in [0x09, 0x29, 0x49, 0x69, 0xC9, 0xA0, 0xA2, 0xA9, 0xC0, 0xE0, 0xE9]:
+        elif opcode in [0x09, 0x29, 0x49, 0x69, 0xC9, 0xA0, 0xA2, 0xA9, 0xC0,
+                        0xE0, 0xEB, 0xE9]:
             return f'#${data1:02X}'
         elif opcode in [0x80]:
             return f'#${data1:02X}'
@@ -154,7 +177,13 @@ class State:
             return f'${data2*0x0100 + data1:04X}'
 
     def log_format(opcode, line):
-        if opcode in [0x0D, 0x0E, 0x2C, 0x2D, 0x2E, 0x4D, 0x4E,
+        byte_count = instructions.instructions[opcode][1]
+
+        if opcode in [0x04, 0x0C, 0x3F, 0x44, 0x53, 0x57, 0x5B, 0x5F, 0x64, 0xA3,
+                      0xA7, 0xAF, 0xB3]:
+            return line[:3+byte_count] + line[-5:]
+
+        elif opcode in [0x0D, 0x0E, 0x2C, 0x2D, 0x2E, 0x4D, 0x4E,
                       0x6D, 0x6E, 0x8C, 0x8D, 0x8E,
                       0xAC, 0xAD, 0xAE,
                       0xCC, 0xCD, 0xCE, 0xEC, 0xED, 0xEE]:
@@ -164,7 +193,7 @@ class State:
                         0x65, 0x66, 0x84, 0x86, 0xA4,
                         0xA5, 0xA6, 0xC4, 0xC5, 0xC6, 0xE4, 0xE5, 0xE6]:
             return line[:5] + line[7:]
-        elif opcode in [0x15, 0x16, 0x35, 0x36, 0x55, 0x56, 0x75, 0x76,
+        elif opcode in [0x15, 0x16, 0x35, 0x36, 0x37, 0x55, 0x56, 0x75, 0x76,
                         0x94, 0x95, 0xB4, 0xB5, 0xD5, 0xD6, 0xF5, 0xF6]:
             return line[:5] + line[9:]
         elif opcode in [0x1D, 0x1E, 0x3D, 0x3E, 0x5D, 0x5E, 0x7D, 0x7E, 0x9D, 0xBC,
@@ -176,7 +205,7 @@ class State:
             return line[:3] + line[4:]
         elif opcode in [0x11, 0x31, 0x51, 0x71, 0x91, 0xB1, 0xD1, 0xF1]:
             return line[:5] + line[11:]
-        elif opcode in [0x19, 0x39, 0x59, 0x79, 0x99, 0xB9, 0xBE, 0xD9, 0xF9]:
+        elif opcode in [0x19, 0x39, 0x3B, 0x59, 0x79, 0x99, 0xB9, 0xBE, 0xD9, 0xF9]:
             return line[:6] + line[10:]
         elif opcode == 0x6C:
             return line[:6] + line[8:]
@@ -196,12 +225,42 @@ class State:
             i = line.index("*NOP")
             return line[:i] + ["NOP", line[i+1][:line[i+1].index(',')]] + line[i+6:]
 
+        elif opcode in [0xB7, 0xBF]:
+            i = line.index("*LAX")
+            return line[:i+2] + line[i+6:]
+
+        elif opcode in [0x97]:
+            i = line.index("*SAX")
+            return line[:i+2] + line[i+6:]
+        
+        elif opcode in [0xD3]:
+            i = line.index("*DCP")
+            return line[:i+2] + line[i+8:]
+        elif opcode in [0xD7, 0xDB, 0xDF]:
+            i = line.index("*DCP")
+            return line[:i+2] + line[i+6:]
+        elif opcode in [0xF7, 0xFB, 0xFF]:
+            i = line.index("*ISB")
+            return line[:i+2] + line[i+6:]
+        elif opcode in [0xF3]:
+            i = line.index("*ISB")
+            return line[:i+2] + line[i+8:]
+        elif opcode in [0x13]:
+            i = line.index("*SLO")
+            return line[:i+2] + line[i+8:]
+        elif opcode in [0x17, 0x1B, 0x1F]:
+            i = line.index("*SLO")
+            return line[:i+2] + line[i+6:]
+        elif opcode in [0x33]:
+            i = line.index("*RLA")
+            return line[:i+2] + line[i+8:]
+
         elif "@" in line:
             return line[:line.index("@")] + line[line.index("@")+6:]
 
         elif "*NOP" in line:
             i = line.index("*NOP")
-            return line[:i] + ["NOP", line[i+1]] + line[i+4:]
+            return line[:i] + ["NOP", line[i+1]] + line[i+5:]
         elif "=" in line:
             return line[:line.index("=")] + line[line.index("=")+2:]
 

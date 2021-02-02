@@ -2,6 +2,8 @@
 import numpy as np
 from behaviors import Behaviors
 
+from region import *
+
 #-
 
 def byte(data):
@@ -111,35 +113,82 @@ def N_set(state, value):
 
 #-
 
-def SEI(state, a) -> [(0x78, implied)]: state.status_register['Interrupt'] = 1
-def CLI(state, a) -> [(0x58, implied)]: state.status_register['Interrupt'] = 0
-def CLD(state, a) -> [(0xD8, implied)]: state.status_register['Decimal'] = 0
-def SEC(state, a) -> [(0x38, implied)]: state.status_register['Carry'] = 1
-def CLC(state, a) -> [(0x18, implied)]: state.status_register['Carry'] = 0
-def SED(state, a) -> [(0xF8, implied)]: state.status_register['Decimal'] = 1
-def CLV(state, a) -> [(0xB8, implied)]: state.status_register['Overflow'] = 0
+def SEI(state, a) -> [(0x78, implied)]:
+    # state.status_register['Interrupt'] = 1
+    RegionComposition(flags=Region_Flags(I_keep=0, I_adjust=1)).transition(state, ComputationState())
+def CLI(state, a) -> [(0x58, implied)]:
+    # state.status_register['Interrupt'] = 0
+    Region_Flags.transition(state, ComputationState(), I_keep=0, I_adjust=0)
+def CLD(state, a) -> [(0xD8, implied)]:
+    # state.status_register['Decimal'] = 0
+    Region_Flags.transition(state, ComputationState(), D_keep=0, D_adjust=0)
+def SEC(state, a) -> [(0x38, implied)]:
+    # state.status_register['Carry'] = 1
+    region = RegionComposition(flags=Region_Flags(C_keep=0, C_adjust=1))
+    region.transition(state, ComputationState())
+def CLC(state, a) -> [(0x18, implied)]:
+    # state.status_register['Carry'] = 0
+    region = RegionComposition(flags=Region_Flags(C_keep=0, C_adjust=0))
+    region.transition(state, ComputationState())
+def SED(state, a) -> [(0xF8, implied)]:
+    # state.status_register['Decimal'] = 1
+    RegionComposition(flags=Region_Flags(D_keep=0, D_adjust=1)).transition(state, ComputationState())
+def CLV(state, a) -> [(0xB8, implied)]:
+    # state.status_register['Overflow'] = 0
+    Region_Flags.transition(state, ComputationState(), O_keep=0, O_adjust=0)
 
 def NOP(state, a) -> [(0x04, zeropage_address), (0x0C, absolute_address), (0x14, zeropage_x_address), (0x1A, implied),
                       (0x1C, absolute_x_address), (0x34, zeropage_x_address), (0x3A, implied), (0x3C, absolute_x_address),
                       (0x44, zeropage_address), (0x54, zeropage_x_address), (0x5A, implied), (0x5C, absolute_x_address),
                       (0x64, zeropage_address), (0x74, zeropage_x_address), (0x7A, implied), (0x7C, absolute_x_address),
                       (0x80, immediate), (0xD4, zeropage_x_address), (0xDA, implied), (0xDC, absolute_x_address), (0xEA, implied),
-                      (0xF4, zeropage_x_address), (0xFA, implied), (0xFC, absolute_x_address)]: pass
+                      (0xF4, zeropage_x_address), (0xFA, implied), (0xFC, absolute_x_address)]:
+    region = RegionComposition()
+    region.transition(state, ComputationState())
 
 def LDA(state, a) -> [(0xA1, indirect_x_dereference), (0xA5, zeropage_dereference), (0xA9, immediate),
                       (0xAD, absolute_dereference), (0xB1, indirect_y_dereference), (0xB5, zeropage_x_dereference),
                       (0xB9, absolute_y_dereference), (0xBD, absolute_x_dereference)]:
-    state.A = a; Z_set(state, a); N_set(state, a)
+    # state.A = a; Z_set(state, a); N_set(state, a)
+    region = RegionComposition(
+        region7=Region7(A_keep=0, A_adjust=0, A_value_adjust=1),
+        flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
+                           Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1))
+
+    computation_state = ComputationState(value1=a)
+    region.transition(state, computation_state)
 
 def LDX(state, a) -> [(0xA2, immediate), (0xA6, zeropage_dereference), (0xAE, absolute_dereference),
                       (0xB6, zeropage_y_dereference), (0xBE, absolute_y_dereference)]:
-    state.X = a; Z_set(state, a); N_set(state, a)
+    # state.X = a; Z_set(state, a); N_set(state, a)
+    region = RegionComposition(
+        region7=Region7(X_keep=0, X_adjust=0, X_value_adjust=1),
+        flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
+                           Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1))
+
+    computation_state = ComputationState(value1=a)
+    region.transition(state, computation_state)
 
 def LDY(state, a) -> [(0xA0, immediate), (0xA4, zeropage_dereference), (0xAC, absolute_dereference),
                       (0xB4, zeropage_x_dereference), (0xBC, absolute_x_dereference)]:
-    state.Y = a; Z_set(state, a); N_set(state, a)
+    # state.Y = a; Z_set(state, a); N_set(state, a)
+    region = RegionComposition(
+        region7=Region7(Y_keep=0, Y_adjust=0, Y_value_adjust=1),
+        flags=Region_Flags(N_keep=0, N_adjust=0, N_value_adjust=1,
+                        Z_keep=0, Z_adjust=0, Z_value_adjust=1))
 
-def DEX(state, a) -> [(0xCA, implied)]: state.X = byte(state.X - 1); Z_set(state, state.X); N_set(state, state.X)
+    computation_state = ComputationState(value1=a)
+    Region7.transition(state, computation_state)
+    Region_Flags.transition(state, computation_state)
+
+def DEX(state, a) -> [(0xCA, implied)]:
+    # state.X = byte(state.X - 1); Z_set(state, state.X); N_set(state, state.X)
+    computation_state = ComputationState(value1=a)
+
+    Region7.transition(state, computation_state, Y_keep=0, Y_adjust=0, Y_value_adjust=1)
+    Region_Flags.transition(state, computation_state, N_keep=0, N_adjust=0, N_value_adjust=1,
+                                                 Z_keep=0, Z_adjust=0, Z_value_adjust=1)
+
 def DEY(state, a) -> [(0x88, implied)]: state.Y = byte(state.Y - 1); Z_set(state, state.Y); N_set(state, state.Y)
 def INY(state, a) -> [(0xC8, implied)]: state.Y = byte(state.Y + 1); Z_set(state, state.Y); N_set(state, state.Y)
 
@@ -172,9 +221,18 @@ def BIT(state, a) -> [(0x2C, absolute_dereference)]:
     state.status_register['Overflow'] = (a >> 6) & 0x01
 
 def BIT_zpg(state, a) -> [(0x24, zeropage_dereference)]:
-    state.status_register['Negative'] = (a >> 7) & 0x01
-    state.status_register['Overflow'] = (a >> 6) & 0x01
-    Z_set(state, byte(state.A & a))
+    # state.status_register['Negative'] = (a >> 7) & 0x01
+    # state.status_register['Overflow'] = (a >> 6) & 0x01
+    # Z_set(state, byte(state.A & a))
+
+    region = RegionComposition(
+        boolean_logic=RegionBooleanLogic(AND_A=1, A_wire=0, value3_wire=1),
+        rewire=RegionRewire(value2_keep=0, value2_from_bit6=1),
+        flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
+                           O_keep=0, O_adjust=0, O_adjust_source=Wire.VALUE2,
+                           Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE3))
+
+    region.transition(state, ComputationState(value1=a))
 
 def CMP(state, a) -> [(0xC1, indirect_x_dereference), (0xC5, zeropage_dereference), (0xC9, immediate),
                       (0xCD, absolute_dereference), (0xD1, indirect_y_dereference), (0xD5, zeropage_x_dereference),
@@ -205,7 +263,10 @@ def CPY(state, a) -> [(0xC0, immediate), (0xC4, zeropage_dereference), (0xCC, ab
 def ORA(state, a) -> [(0x01, indirect_x_dereference), (0x05, zeropage_dereference), (0x09, immediate),
                       (0x0D, absolute_dereference), (0x11, indirect_y_dereference), (0x15, zeropage_x_dereference),
                       (0x19, absolute_y_dereference), (0x1D, absolute_x_dereference)]:
-    state.A |= a; Z_set(state, state.A); N_set(state, state.A)
+    # state.A |= a; Z_set(state, state.A); N_set(state, state.A)
+    computation_state = ComputationState(value1=a)
+    RegionBooleanLogic.transition(state, computation_state, A_keep=0, OR_A=1)
+    Region_Flags.transition(state, computation_state, N_keep=0, N_adjust=0, N_value_adjust=1)
 
 def EOR(state, a) -> [(0x41, indirect_x_dereference), (0x45, zeropage_dereference), (0x49, immediate),
                       (0x4D, absolute_dereference), (0x51, indirect_y_dereference), (0x55, zeropage_x_dereference),
@@ -365,7 +426,12 @@ def STA(state, a) -> [(0x81, indirect_x_address), (0x8D, absolute_address), (0x8
                       (0x9D, absolute_x_address)]:
     state.memory[a] = state.A
 def STX(state, a) -> [(0x86, zeropage_address), (0x8E, absolute_address), (0x96, zeropage_y_address)]:
-    state.memory[a] = state.X
+    # state.memory[a] = state.X
+    region = RegionComposition(region6=Region6())
+
+    computation_state = ComputationState(value1=state.X, address=a)
+    region.transition(state, computation_state)
+
 def STY(state, a) -> [(0x84, zeropage_address), (0x8C, absolute_address), (0x94, zeropage_x_address)]:
     state.memory[a] = state.Y
 def TXA(state, a) -> [(0x8A, implied)]: state.A = state.X; Z_set(state, state.A); N_set(state, state.A)
@@ -376,39 +442,66 @@ def TSX(state, a) -> [(0xBA, implied)]: state.X = state.stack_offset; Z_set(stat
 def TXS(state, a) -> [(0x9A, implied)]: state.stack_offset = state.X
 
 def BPL(state, a) -> [(0x10, relative_address)]:
-    if state.status_register['Negative'] == 0:
-        state.program_counter += np.int8(a)
+    # if state.status_register['Negative'] == 0:
+    #     state.program_counter += np.int8(a)
+    region = RegionComposition(region_branch=RegionBranch(flag_match=0, N_flag_branch=1))
+    computation_state = ComputationState(value1=a)
+    region.transition(state, computation_state)
 
 def BMI(state, a) -> [(0x30, relative_address)]:
     if state.status_register['Negative'] == 1:
         state.program_counter += np.int8(a)
 
 def BCC(state, a) -> [(0x90, relative_address)]:
-    if state.status_register['Carry'] == 0:
-        state.program_counter += np.int8(a)
+    # if state.status_register['Carry'] == 0:
+    #     state.program_counter += np.int8(a)
+    region = RegionComposition(region_branch=RegionBranch(flag_match=0, C_flag_branch=1))
+    computation_state = ComputationState(value1=a)
+    region.transition(state, computation_state)
 
 def BCS(state, a) -> [(0xB0, relative_address)]:
-    if state.status_register['Carry'] == 1:
-        state.program_counter += np.int8(a)
+    # if state.status_register['Carry'] == 1:
+    #     state.program_counter += np.int8(a)
+    region = RegionComposition(region_branch=RegionBranch(flag_match=1, C_flag_branch=1))
+    computation_state = ComputationState(value1=a)
+    region.transition(state, computation_state)
 
 def BNE(state, a) -> [(0xD0, relative_address)]:
-    if state.status_register['Zero'] == 0:
-        state.program_counter += np.int8(a)
+    # if state.status_register['Zero'] == 0:
+    #     state.program_counter += np.int8(a)
+    region = RegionComposition(region_branch=RegionBranch(flag_match=0, Z_flag_branch=1))
+    computation_state = ComputationState(value1=a)
+    region.transition(state, computation_state)
 
 def BEQ(state, a) -> [(0xF0, relative_address)]:
-    if state.status_register['Zero'] == 1:
-        state.program_counter += np.int8(a)
+    # if state.status_register['Zero'] == 1:
+    #     state.program_counter += np.int8(a)
+    region = RegionComposition(region_branch=RegionBranch(flag_match=1, Z_flag_branch=1))
+    computation_state = ComputationState(value1=a)
+    region.transition(state, computation_state)
 
 def BVC(state, a) -> [(0x50, relative_address)]:
-    if state.status_register['Overflow'] == 0:
-        state.program_counter += np.int8(a)
+    # if state.status_register['Overflow'] == 0:
+    #     state.program_counter += np.int8(a)
+    region = RegionComposition(region_branch=RegionBranch(flag_match=0, O_flag_branch=1))
+
+    computation_state = ComputationState(value1=a)
+    region.transition(state, computation_state)
+
 
 def JMP(state, a) -> [(0x4C, absolute_address), (0x6C, absolute_address_dereference)]:
-    state.program_counter = a
+    # state.program_counter = a
+    region = RegionComposition(region1=Region1(PC_keep=0, PC_value_adjust=1))
+
+    computation_state = ComputationState(value1=a)
+    region.transition(state, computation_state)
 
 def BVS(state, a) -> [(0x70, relative_address)]:
-    if state.status_register['Overflow'] == 1:
-        state.program_counter += np.int8(a)
+    # if state.status_register['Overflow'] == 1:
+    #     state.program_counter += np.int8(a)
+    region = RegionComposition(region_branch=RegionBranch(flag_match=1, O_flag_branch=1))
+    computation_state = ComputationState(value1=a)
+    region.transition(state, computation_state)
 
 def JSR(state, a) -> [(0x20, absolute_address)]:
     # Stack is from range 0x0100-0x1FF and grows down from 0x0100 + 0xFD.

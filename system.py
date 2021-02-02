@@ -51,24 +51,35 @@ class State:
         self.ppu = PictureProcessingUnit()
         self.memory = Memory(self, program_data, load_point=load_point)
 
-        self.status_register = {
-            'Negative': 0,
-            'Overflow': 0,
-            'Unused': 1,
-            'Break': 0,
-            'Decimal': 0,
-            'Interrupt': 1,
-            'Zero': 0,
-            'Carry': 0,
-        }
+        self.N = 0
+        self.O = 0
+        self.U = 1
+        self.B = 0
+        self.D = 0
+        self.I = 1
+        self.Z = 0
+        self.C = 0
+
+        # self.status_register = {
+        #     'Negative': 0,
+        #     'Overflow': 0,
+        #     'Unused': 1,
+        #     'Break': 0,
+        #     'Decimal': 0,
+        #     'Interrupt': 1,
+        #     'Zero': 0,
+        #     'Carry': 0,
+        # }
 
         self.reset()
 
     def status_register_byte(self):
-        sr = self.status_register
-        status_register = (
-            (sr['Negative'] << 7) + (sr['Overflow'] << 6) + (sr['Unused'] << 5) + (sr['Break'] << 4) +
-            (sr['Decimal'] << 3) + (sr['Interrupt'] << 2) + (sr['Zero'] << 1) + (sr['Carry'] << 0))
+        # sr = self.status_register
+        # status_register = (
+        #     (sr['Negative'] << 7) + (sr['Overflow'] << 6) + (sr['Unused'] << 5) + (sr['Break'] << 4) +
+        #     (sr['Decimal'] << 3) + (sr['Interrupt'] << 2) + (sr['Zero'] << 1) + (sr['Carry'] << 0))
+
+        status_register = (self.N<<7) + (self.O<<6) + (self.U<<5) + (self.B<<4) + (self.D<<3) + (self.I<<2) + (self.Z<<1) + (self.C<<0)
 
         return status_register
 

@@ -83,10 +83,18 @@ class State:
 
         return status_register
 
-    def status_register_byte_set(self, sr):
-        self.status_register = {
-            key: (sr >> bit) & 0x01
-            for key, bit in zip(self.status_register.keys(), [7, 6, 5, 4, 3, 2, 1, 0])}
+    def status_register_byte_set(self, byte):
+        # self.status_register = {
+        #     key: (sr >> bit) & 0x01
+        #     for key, bit in zip(self.status_register.keys(), [7, 6, 5, 4, 3, 2, 1, 0])}
+        self.N = (byte>>7) & 0x01
+        self.O = (byte>>6) & 0x01
+        self.U = (byte>>5) & 0x01
+        self.B = (byte>>4) & 0x01
+        self.D = (byte>>3) & 0x01
+        self.I = (byte>>2) & 0x01
+        self.Z = (byte>>1) & 0x01
+        self.C = (byte>>0) & 0x01
 
     def reset(self):
         if self.program_counter_initial:
@@ -222,7 +230,37 @@ class State:
                 self.previous_status = self.status_register_byte()
                 self.previous_stack_offset = self.stack_offset
 
-                operation(self, addressing(self, data1, data2))
+                import instructions as ins
+                import region
+
+                # print(operation.__name__, end=' * ')
+
+                if addressing in [ins.indirect_x_address, ins.absolute_address, ins.zeropage_address,
+                                  ins.indirect_y_address, ins.zeropage_x_address, ins.absolute_y_address,
+                                  ins.absolute_x_address]:
+                    print('_')
+                    value1 = 0
+                    address1 = addressing(self, data1, data2)
+
+                else:
+                    value1 = addressing(self, data1, data2)
+                    address1 = region.ComputationState.NULL_ADDRESS
+
+                if operation.__name__ in ['JSR', 'RTS', 'RTI']:
+                    operation(self, address1)
+
+                elif operation.__name__ in ['ADC', 'SBC']:
+                    operation(self, value1)
+
+                else:
+                    # operation(self, value1)
+                    # print(operation.__name__, addressing.__name__, value1, f'{address1:04X}')
+                    region1 = operation(1, 1)
+
+                    if byte_count == 1:
+                        region1.transition(self, region.ComputationState())
+                    else:
+                        region1.transition(self, region.ComputationState(value1=value1, address=address1))
 
                 self.operations_count += 1
 

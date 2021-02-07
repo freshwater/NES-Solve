@@ -10,7 +10,7 @@ class Behaviors:
             ppu.registers.array[register_index] &= 0x7F
             ppu.address_latch = 0
 
-    def write_special_status_bits_on_push(function, status_register):
+    def write_special_status_bits_on_push0(function, status_register):
         """
         https://wiki.nesdev.com/w/index.php/Status_flags#The_B_flag
         Two interrupts (/IRQ and /NMI) and two instructions (PHP and BRK)
@@ -24,6 +24,10 @@ class Behaviors:
         from instructions import PHP
 
         return status_register | 0x20 | (0x10 if function in [PHP] else 0x00)
+
+    def write_special_status_bits_on_push(status_register, is_PHP_or_BRK):
+        return status_register | 0x20 | (0x10 if is_PHP_or_BRK else 0x00)
+
 
     def read_special_status_bits_on_pull(state, data):
         """

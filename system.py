@@ -235,9 +235,9 @@ class State:
 
                 # print(operation.__name__, end=' * ')
 
-                if addressing in [ins.indirect_x_address, ins.absolute_address, ins.zeropage_address,
-                                  ins.indirect_y_address, ins.zeropage_x_address, ins.absolute_y_address,
-                                  ins.absolute_x_address]:
+                if addressing in [ins.zeropage_address, ins.absolute_address, ins.absolute_address_dereference,
+                                  ins.zeropage_x_address, ins.indirect_x_address, ins.absolute_x_address, 
+                                  ins.zeropage_y_address, ins.indirect_y_address, ins.absolute_y_address]:
                     print('_')
                     value1 = 0
                     address1 = addressing(self, data1, data2)

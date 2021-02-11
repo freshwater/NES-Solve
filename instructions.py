@@ -15,90 +15,120 @@ STACK_ZERO = 0x0100
 
 #-
 
-def implied(state, _data1, _data2):
-    pass
+def implied(): # state, _data1, _data2):
+    # pass
+    return Region_Wire()
 
-def immediate(state, data1, _data2):
-    return data1
+def immediate(): # state, data1, _data2):
+    # return data1
+    return Region_Wire(value1_from_zeropage=1)
 
-def absolute_dereference(state, data1, data2):
-    return state.memory[data2*0x0100 + data1]
+def absolute_dereference(): # state, data1, data2):
+    # return state.memory[data2*0x0100 + data1]
+    return Region_Wire(value1_from_absolute_dereference=1)
 
-def absolute_address(state, data1, data2):
-    return data2*0x0100 + data1
+def absolute_address(): # state, data1, data2):
+    # return data2*0x0100 + data1
+    return Region_Wire(address_from_absolute=1)
 
-def absolute_address_dereference(state, data1, data2):
+def absolute():
+    return Region_Wire(value1_from_absolute_dereference=1, address_from_absolute=1)
+
+def absolute_address_dereference(): # state, data1, data2):
     # indirect wraps at page boundary
-    L = state.memory[data2*0x0100 + data1]
-    H = state.memory[data2*0x0100 + byte(data1 + 1)]
+    # L = state.memory[data2*0x0100 + data1]
+    # H = state.memory[data2*0x0100 + byte(data1 + 1)]
+    # return H*0x0100 + L
+    return Region_Wire(address_from_absolute_indirect=1)
 
-    return H*0x0100 + L
+def zeropage_dereference(): # state, data1, _data2):
+    # return state.memory[data1]
+    return Region_Wire(value1_from_zeropage_dereference=1, address_from_zeropage=1)
 
-def zeropage_dereference(state, data1, _data2):
-    return state.memory[data1]
+def zeropage_address(): # state, data1, _data2):
+    # return data1
+    return Region_Wire(address_from_zeropage=1)
 
-def zeropage_address(state, data1, _data2):
-    return data1
-
-def relative_address(state, data1, _data2):
-    return data1
+def relative_address(): # state, data1, _data2):
+    # return data1
+    return Region_Wire(value1_from_zeropage=1)
 
 
 # X
 
-def absolute_x_dereference(state, data1, data2):
-    return state.memory[data2*0x0100 + data1 + state.X]
+def absolute_x_dereference(): # state, data1, data2):
+    # return state.memory[data2*0x0100 + data1 + state.X]
+    return Region_Wire(value1_from_absolute_x_dereference=1)
 
-def absolute_x_address(state, data1, data2):
-    return data2*0x0100 + data1 + state.X
+def absolute_x_address(): # state, data1, data2):
+    # return data2*0x0100 + data1 + state.X
+    return Region_Wire(address_from_absolute_x=1)
 
-def zeropage_x_dereference(state, data1, _data2):
-    return state.memory[byte(data1 + state.X)]
+def absolute_x(): # state, data1, data2):
+    # return data2*0x0100 + data1 + state.X
+    return Region_Wire(value1_from_absolute_x_dereference=1, address_from_absolute_x=1)
 
-def zeropage_x_address(state, data1, _data2):
-    return byte(data1 + state.X)
+def zeropage_x_dereference(): # state, data1, _data2):
+    # return state.memory[byte(data1 + state.X)]
+    return Region_Wire(value1_from_zeropage_x=1)
 
-def indirect_x_dereference(state, data1, _data2):
-    L = state.memory[byte(data1 + state.X)]
-    H = state.memory[byte(data1 + state.X + 1)]
-    address = H*0x0100 + L
-    return state.memory[address]
+def zeropage_x_address(): # state, data1, _data2):
+    # return byte(data1 + state.X)
+    return Region_Wire(address_from_zeropage_x=1)
 
-def indirect_x_address(state, data1, _data2):
-    L = state.memory[byte(data1 + state.X)]
-    H = state.memory[byte(data1 + state.X + 1)]
-    return H*0x0100 + L
+def zeropage_x():
+    return Region_Wire(value1_from_zeropage_x=1, address_from_zeropage_x=1)
+
+def indirect_x_dereference(): # state, data1, _data2):
+    # L = state.memory[byte(data1 + state.X)]
+    # H = state.memory[byte(data1 + state.X + 1)]
+    # address = H*0x0100 + L
+    # return state.memory[address]
+    return Region_Wire(value1_from_indirect_x_dereference=1)
+
+def indirect_x_address(): # state, data1, _data2):
+    # L = state.memory[byte(data1 + state.X)]
+    # H = state.memory[byte(data1 + state.X + 1)]
+    # return H*0x0100 + L
+    return Region_Wire(address_from_indirect_x=1)
 
 
 # Y
 
-def absolute_y_dereference(state, data1, data2):
-    address = data2*0x0100 + data1
-    return state.memory[address + state.Y]
+def absolute_y_dereference(): # state, data1, data2):
+    # address = data2*0x0100 + data1
+    # return state.memory[address + state.Y]
+    return Region_Wire(value1_from_absolute_y_dereference=1)
 
-def absolute_y_address(state, data1, data2):
-    address = data2*0x0100 + data1
-    return address + state.Y
+def absolute_y_address(): # state, data1, data2):
+    # address = data2*0x0100 + data1
+    # return address + state.Y
+    return Region_Wire(address_from_absolute_y=1)
 
-def zeropage_y_dereference(state, data1, _data2):
-    return state.memory[byte(data1 + state.Y)]
+def zeropage_y_dereference(): # state, data1, _data2):
+    # return state.memory[byte(data1 + state.Y)]
+    return Region_Wire(value1_from_zeropage_y=1)
 
-def zeropage_y_address(state, data1, _data2):
-    return byte(data1 + state.Y)
+def zeropage_y_address(): # state, data1, _data2):
+    # return byte(data1 + state.Y)
+    return Region_Wire(address_from_zeropage_y=1)
 
-def indirect_y_dereference(state, data1, _data2):
-    address = state.memory[byte(data1+1)]*0x0100 + state.memory[data1]
-    return state.memory[address + state.Y]
+def indirect_y_dereference(): # state, data1, _data2):
+    # address = state.memory[byte(data1+1)]*0x0100 + state.memory[data1]
+    # return state.memory[address + state.Y]
+    return Region_Wire(value1_from_indirect_y_dereference=1)
 
-def indirect_y_address(state, data1, _data2):
-    address = state.memory[data1+1]*0x0100 + state.memory[data1]
-    return address + state.Y
+def indirect_y_address(): # state, data1, _data2):
+    # address = state.memory[data1+1]*0x0100 + state.memory[data1]
+    # return address + state.Y
+    return Region_Wire(address_from_indirect_y=1)
 
 #-
 
 byte_counts = {implied: 1, immediate: 2, relative_address: 2, zeropage_dereference: 2,
                zeropage_address: 2, zeropage_x_dereference: 2, zeropage_x_address: 2,
                zeropage_y_dereference: 2, zeropage_y_address: 2, absolute_dereference: 3,
+               absolute: 3, zeropage_x: 2, absolute_x: 3,
                absolute_address: 3, absolute_x_dereference: 3, absolute_x_address: 3,
                indirect_x_dereference: 2, indirect_x_address: 2, indirect_y_address: 2,
                indirect_y_dereference: 2, absolute_address_dereference: 3,
@@ -136,7 +166,7 @@ def NOP(state, a) -> [(0x04, zeropage_address), (0x0C, absolute_address), (0x14,
     return RegionComposition()
 
 def LDA(state, a) -> [(0xA1, indirect_x_dereference), (0xA5, zeropage_dereference), (0xA9, immediate),
-                      (0xAD, absolute_dereference), (0xB1, indirect_y_dereference), (0xB5, zeropage_x_dereference),
+                      (0xAD, absolute), (0xB1, indirect_y_dereference), (0xB5, zeropage_x_dereference),
                       (0xB9, absolute_y_dereference), (0xBD, absolute_x_dereference)]:
     # state.A = a; Z_set(state, a); N_set(state, a)
     return RegionComposition(
@@ -184,11 +214,10 @@ def INY(state, a) -> [(0xC8, implied)]:
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1))
 
-def INC(state, a) -> [(0xE6, zeropage_address), (0xEE, absolute_address), (0xF6, zeropage_x_address),
-                      (0xFE, absolute_x_address)]:
+def INC(state, a) -> [(0xE6, zeropage_dereference), (0xEE, absolute), (0xF6, zeropage_x),
+                      (0xFE, absolute_x)]:
     # state.memory[a] += 1; Z_set(state, state.memory[a]); N_set(state, state.memory[a])
     return RegionComposition(
-        wire=Region_Wire(value1_from_address=1),
         arithmetic=Region_Arithmetic(value1_increment=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1),
@@ -202,13 +231,12 @@ def INX(state, a) -> [(0xE8, implied)]:
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1))
 
-def DEC_zpg(state, a) -> [(0xC6, zeropage_address), (0xCE, absolute_address), (0xD6, zeropage_x_address),
-                          (0xDE, absolute_x_address)]:
+def DEC_zpg(state, a) -> [(0xC6, zeropage_dereference), (0xCE, absolute), (0xD6, zeropage_x),
+                          (0xDE, absolute_x)]:
     # state.memory[a] -= 1
     # Z_set(state, state.memory[a])
     # N_set(state, state.memory[a])
     return RegionComposition(
-        wire=Region_Wire(value1_from_address=1),
         arithmetic=Region_Arithmetic(value1_increment=-1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1),
@@ -308,65 +336,65 @@ def AND(state, a) -> [(0x21, indirect_x_dereference), (0x25, zeropage_dereferenc
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1))
 
-def ASL(state, a) -> [(0x0A, implied)]:
+def ASL(state, a) -> [(0x0A, implied, Region_Wire(value1_from_A=1))]:
     # result = state.A << 1
     # Z_set(state, byte(result))
     # N_set(state, byte(result))
     # state.status_register['Carry'] = 1*(result & 0xFF00 > 0)
     # state.A = byte(result)
     return RegionComposition(
-        wire=Region_Wire(value1_from_A=1),
+        # wire=Region_Wire(value1_from_A=1),
         bit_shift=Region_BitShift(left_shift=1, value1_out=1, value3_from_carry=1),
         rewire=Region_Rewire(A_from_value1=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1,
                            C_keep=0, C_adjust=0, C_adjust_direct=Wire.VALUE3))
 
-def ASL_zpg(state, a) -> [(0x06, zeropage_address), (0x0E, absolute_address), (0x16, zeropage_x_address),
-                          (0x1E, absolute_x_address)]:
+def ASL_zpg(state, a) -> [(0x06, zeropage_dereference), (0x0E, absolute), (0x16, zeropage_x),
+                          (0x1E, absolute_x)]:
     # result = byte(state.memory[a] << 1)
     # Z_set(state, result)
     # N_set(state, result)
     # state.status_register['Carry'] = state.memory[a] >> 7
     # state.memory[a] = result
     return RegionComposition(
-        wire=Region_Wire(value1_from_address=1),
         bit_shift=Region_BitShift(left_shift=1, value1_out=1, value3_from_carry=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1,
                            C_keep=0, C_adjust=0, C_adjust_direct=Wire.VALUE3),
         write=Region_Write(address_write=1))
 
-def LSR(state, a) -> [(0x4A, implied)]:
+def LSR(state, a) -> [(0x4A, implied, Region_Wire(value1_from_A=1))]:
     # result = state.A >> 1
     # Z_set(state, result)
     # N_set(state, result)
     # state.status_register['Carry'] = state.A & 0x01
     # state.A = result
     return RegionComposition(
-        wire=Region_Wire(value1_from_A=1),
+        # wire=Region_Wire(value1_from_A=1),
         bit_shift=Region_BitShift(right_shift=1, value1_out=1, value3_from_carry=1),
         rewire=Region_Rewire(A_from_value1=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1,
                            C_keep=0, C_adjust=0, C_adjust_direct=Wire.VALUE3))
 
-def LSR_zpg(state, a) -> [(0x46, zeropage_address), (0x4E, absolute_address), (0x56, zeropage_x_address),
-                          (0x5E, absolute_x_address)]:
+def LSR_zpg(state, a) -> [(0x46, zeropage_dereference),#, Region_Wire(value1_from_zeropage_dereference=1, address_from_zeropage=1)),
+                          (0x4E, absolute), (0x56, zeropage_x),
+                          (0x5E, absolute_x)]:
     # result = state.memory[a] >> 1
     # Z_set(state, result)
     # N_set(state, result)
     # state.status_register['Carry'] = state.memory[a] & 0x01
     # state.memory[a] = result
     return RegionComposition(
-        wire=Region_Wire(value1_from_address=1),
+        # wire=Region_Wire(value1_from_address=1),
         bit_shift=Region_BitShift(right_shift=1, value1_out=1, value3_from_carry=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1,
                            C_keep=0, C_adjust=0, C_adjust_direct=Wire.VALUE3),
         write=Region_Write(address_write=1))
 
-def ROL(state, a) -> [(0x2A, implied)]:
+def ROL(state, a) -> [(0x2A, implied, Region_Wire(value1_from_A=1))]:
     # result = (state.A << 1) | state.status_register['Carry']
     # state.status_register['Carry'] = 1*(result & 0xFF00 > 0)
     # result = byte(result)
@@ -374,15 +402,15 @@ def ROL(state, a) -> [(0x2A, implied)]:
     # N_set(state, result)
     # state.A = result
     return RegionComposition(
-        wire=Region_Wire(value1_from_A=1),
+        # wire=Region_Wire(value1_from_A=1),
         bit_shift=Region_BitShift(left_rotate=1, value1_out=1, value3_from_carry=1),
         rewire=Region_Rewire(A_from_value1=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1,
                            C_keep=0, C_adjust=0, C_adjust_direct=Wire.VALUE3))
 
-def ROL_zpg(state, a) -> [(0x26, zeropage_address), (0x2E, absolute_address), (0x36, zeropage_x_address),
-                          (0x3E, absolute_x_address)]:
+def ROL_zpg(state, a) -> [(0x26, zeropage_dereference), (0x2E, absolute), (0x36, zeropage_x),
+                          (0x3E, absolute_x)]:
     # result = (state.memory[a] << 1) | state.status_register['Carry']
     # state.status_register['Carry'] = 1*(result & 0xFF00 > 0)
     # result = byte(result)
@@ -390,14 +418,13 @@ def ROL_zpg(state, a) -> [(0x26, zeropage_address), (0x2E, absolute_address), (0
     # N_set(state, result)
     # state.memory[a] = result
     return RegionComposition(
-        wire=Region_Wire(value1_from_address=1),
         bit_shift=Region_BitShift(left_rotate=1, value1_out=1, value3_from_carry=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1,
                            C_keep=0, C_adjust=0, C_adjust_direct=Wire.VALUE3),
         write=Region_Write(address_write=1))
 
-def ROR(state, a) -> [(0x6A, implied)]:
+def ROR(state, a) -> [(0x6A, implied, Region_Wire(value1_from_A=1))]:
     # result = state.status_register['Carry'] << 7
     # state.status_register['Carry'] = state.A & 0x01
     # result += state.A >> 1
@@ -405,15 +432,15 @@ def ROR(state, a) -> [(0x6A, implied)]:
     # Z_set(state, result)
     # state.A = result
     return RegionComposition(
-        wire=Region_Wire(value1_from_A=1),
+        # wire=Region_Wire(value1_from_A=1),
         bit_shift=Region_BitShift(right_rotate=1, value1_out=1, value3_from_carry=1),
         rewire=Region_Rewire(A_from_value1=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1,
                            C_keep=0, C_adjust=0, C_adjust_direct=Wire.VALUE3))
 
-def ROR_zpg(state, a) -> [(0x66, zeropage_address), (0x6E, absolute_address), (0x76, zeropage_x_address),
-                          (0x7E, absolute_x_address)]:
+def ROR_zpg(state, a) -> [(0x66, zeropage_dereference), (0x6E, absolute), (0x76, zeropage_x),
+                          (0x7E, absolute_x)]:
     # result = state.status_register['Carry'] << 7
     # state.status_register['Carry'] = state.memory[a] & 0x01
     # result += state.memory[a] >> 1
@@ -421,7 +448,7 @@ def ROR_zpg(state, a) -> [(0x66, zeropage_address), (0x6E, absolute_address), (0
     # Z_set(state, result)
     # state.memory[a] = result
     return RegionComposition(
-        wire=Region_Wire(value1_from_address=1),
+        # wire=Region_Wire(value1_from_address=1),
         bit_shift=Region_BitShift(right_rotate=1, value1_out=1, value3_from_carry=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1,
@@ -738,8 +765,10 @@ instructions = {}
 all_ = [0]*256
 for name, func in locals().copy().items():
     if settings := hasattr(func, '__annotations__') and func.__annotations__.get('return'):
-        for opcode, addressing in settings:
-            instructions[opcode] = (func, byte_counts[addressing], addressing)
+        # for opcode, addressing in settings:
+        for tup in settings:
+            opcode, addressing, wire = tup if len(tup) == 3 else tup + (None,)
+            instructions[opcode] = (func, byte_counts[addressing], addressing, wire)
             all_[opcode] = all_[opcode] + 1
 
 for index, count in enumerate(all_):

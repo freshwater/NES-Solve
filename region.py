@@ -11,9 +11,13 @@ STACK_ZERO = 0x0100
 #-
 
 class ComputationState:
-    NULL_ADDRESS = -1
-    def __init__(self, address=NULL_ADDRESS, value1=0, value2=0, value3=0):
-        self.value = value1
+    NULL_ADDRESS = -2
+    def __init__(self, data0, data1, data2,
+                       address=NULL_ADDRESS,
+                       value1=0, value2=0, value3=0):
+        self.data0 = data0
+        self.data1 = data1
+        self.data2 = data2
         self.value1 = value1
         self.value2 = value2
         self.value3 = value3
@@ -99,9 +103,9 @@ class Region_BooleanLogic:
         self.value1_wire, self.value2_wire, self.value3_wire = value1_wire, value2_wire, value3_wire
 
     def transition(self, state, computation_state):
-        result = byte((computation_state.value | state.A)*self.OR_A +
-                      (computation_state.value ^ state.A)*self.XOR_A +
-                      (computation_state.value & state.A)*self.AND_A)
+        result = byte((computation_state.value1 | state.A)*self.OR_A +
+                      (computation_state.value1 ^ state.A)*self.XOR_A +
+                      (computation_state.value1 & state.A)*self.AND_A)
 
         state.A = state.A*(1-self.A_wire) + result*self.A_wire
         computation_state.value1 = computation_state.value1*(1-self.value1_wire) + result*self.value1_wire
@@ -265,14 +269,148 @@ class Region_StackWrite:
         state.memory[address] = computation_state.value1
 
 class Region_Wire:
-    def __init__(self, value1_from_A=0, value1_from_address=0):
+    def __init__(self, value1_from_A=0, value1_from_address=0, value1_from_zeropage=0,
+                 value1_from_zeropage_dereference=0, value1_from_absolute_dereference=0,
+                 value1_from_indirect_x_dereference=0, value1_from_indirect_y_dereference=0,
+                 value1_from_zeropage_x=0, value1_from_absolute_y_dereference=0,
+                 value1_from_zeropage_y=0, address_from_absolute=0, address_from_zeropage=0,
+                 value1_from_absolute_x_dereference=0,
+                 address_from_indirect_x=0, address_from_indirect_y=0,
+                 address_from_zeropage_x=0, address_from_absolute_y=0,
+                 address_from_zeropage_y=0, address_from_absolute_indirect=0,
+                 address_from_absolute_x=0):
         self.value1_from_A = value1_from_A
         self.value1_from_address = value1_from_address
+        self.value1_from_zeropage = value1_from_zeropage
+        self.value1_from_zeropage_dereference = value1_from_zeropage_dereference
+        self.value1_from_absolute_dereference = value1_from_absolute_dereference
+        self.value1_from_indirect_x_dereference = value1_from_indirect_x_dereference
+        self.value1_from_zeropage_x = value1_from_zeropage_x
+        self.value1_from_zeropage_y = value1_from_zeropage_y
+        self.value1_from_indirect_y_dereference = value1_from_indirect_y_dereference
+        self.value1_from_absolute_y_dereference = value1_from_absolute_y_dereference
+        self.value1_from_absolute_x_dereference = value1_from_absolute_x_dereference
+
+        self.address_from_absolute = address_from_absolute
+        self.address_from_zeropage = address_from_zeropage
+        self.address_from_indirect_x = address_from_indirect_x
+        self.address_from_indirect_y = address_from_indirect_y
+        self.address_from_absolute_y = address_from_absolute_y
+        self.address_from_zeropage_x = address_from_zeropage_x
+        self.address_from_zeropage_y = address_from_zeropage_y
+        self.address_from_absolute_indirect = address_from_absolute_indirect
+        self.address_from_absolute_x = address_from_absolute_x
+
+    def read_if(state, address, condition):
+        # print(condition, state.memory[(ComputationState.NULL_ADDRESS)*(1-condition) + (address)*condition], state.memory[-1])
+        return state.memory[(ComputationState.NULL_ADDRESS)*(1-condition) + (address)*condition]*condition
+
+    def zeropage_x_dereference(state, computation_state, condition):
+        # return state.memory[byte(data1 + state.X)]
+        address = (ComputationState.NULL_ADDRESS)*(1-condition) + (byte(computation_state.data1 + state.X))*condition
+        return state.memory[address]*condition
+
+    def absolute_x_dereference(state, computation_state, condition):
+        # return state.memory[data2*0x0100 + data1 + state.X]
+        address = (ComputationState.NULL_ADDRESS)*(1-condition) + (computation_state.data2*0x0100 + computation_state.data1 + state.X)*condition
+        return state.memory[address]*condition
+
+    def absolute_x_address(state, computation_state, condition):
+        # return data2*0x0100 + data1 + state.X
+        return (ComputationState.NULL_ADDRESS)*(1-condition) + (computation_state.data2*0x0100 + computation_state.data1 + state.X)*condition
+
+    def zeropage_x_address(state, computation_state, condition):
+        # return byte(data1 + state.X)
+        return (ComputationState.NULL_ADDRESS)*(1-condition) + (byte(computation_state.data1 + state.X))*condition
+
+    def indirect_x_dereference(state, computation_state, condition):
+        # L = state.memory[byte(data1 + state.X)]
+        # H = state.memory[byte(data1 + state.X + 1)]
+        # address = H*0x0100 + L
+        # return state.memory[address]
+        address_L = (ComputationState.NULL_ADDRESS)*(1-condition) + byte(computation_state.data1 + state.X)*condition
+        address_H = (ComputationState.NULL_ADDRESS)*(1-condition) + byte(computation_state.data1 + state.X + 1)*condition
+        L = state.memory[address_L]
+        H = state.memory[address_H]
+        address = (ComputationState.NULL_ADDRESS)*(1-condition) + (H*0x0100 + L)*condition
+        return state.memory[address]*condition
+
+    def indirect_x_address(state, computation_state, condition):
+        # L = state.memory[byte(data1 + state.X)]
+        # H = state.memory[byte(data1 + state.X + 1)]
+        # return H*0x0100 + L
+        address_L = (ComputationState.NULL_ADDRESS)*(1-condition) + byte(computation_state.data1 + state.X)*condition
+        address_H = (ComputationState.NULL_ADDRESS)*(1-condition) + byte(computation_state.data1 + state.X + 1)*condition
+        L = state.memory[address_L]
+        H = state.memory[address_H]
+        return (ComputationState.NULL_ADDRESS)*(1-condition) + (H*0x0100 + L)*condition
+
+    def zeropage_y_dereference(state, computation_state, condition):
+        # return state.memory[byte(data1 + state.Y)]
+        address = (ComputationState.NULL_ADDRESS)*(1-condition) + (byte(computation_state.data1 + state.Y))*condition
+        return state.memory[address]*condition
+
+    def zeropage_y_address(state, computation_state, condition):
+        # return byte(data1 + state.Y)
+        return (ComputationState.NULL_ADDRESS)*(1-condition) + (byte(computation_state.data1 + state.Y))*condition
+
+    def indirect_y_dereference(state, computation_state, condition):
+        # address = state.memory[byte(data1+1)]*0x0100 + state.memory[data1]
+        # return state.memory[address + state.Y]
+        address_L = (ComputationState.NULL_ADDRESS)*(1-condition) + (computation_state.data1)*condition
+        address_H = (ComputationState.NULL_ADDRESS)*(1-condition) + (byte(computation_state.data1 + 1))*condition
+        address = (ComputationState.NULL_ADDRESS)*(1-condition) + (state.memory[address_H]*0x0100 + state.memory[address_L] + state.Y)*condition
+        return state.memory[address]*condition
+
+    def indirect_y_address(state, computation_state, condition):
+        # address = state.memory[data1+1]*0x0100 + state.memory[data1]
+        # return address + state.Y
+        address_L = (ComputationState.NULL_ADDRESS)*(1-condition) + (computation_state.data1)*condition
+        address_H = (ComputationState.NULL_ADDRESS)*(1-condition) + (byte(computation_state.data1 + 1))*condition
+        address = (ComputationState.NULL_ADDRESS)*(1-condition) + (state.memory[address_H]*0x0100 + state.memory[address_L] + state.Y)*condition
+        return address
+
+    def absolute_y_dereference(state, computation_state, condition):
+        # address = data2*0x0100 + data1
+        # return state.memory[address + state.Y]
+        address = (ComputationState.NULL_ADDRESS)*(1-condition) + (computation_state.data2*0x0100 + computation_state.data1 + state.Y)*condition
+        return state.memory[address]*condition
+
+    def absolute_y_address(state, computation_state, condition):
+        # address = data2*0x0100 + data1 + state.Y
+        return (ComputationState.NULL_ADDRESS)*(1-condition) + (computation_state.data2*0x0100 + computation_state.data1 + state.Y)*condition
+
+    def absolute_address_indirect(state, computation_state, condition):
+        # L = state.memory[data2*0x0100 + data1]
+        # H = state.memory[data2*0x0100 + byte(data1 + 1)]
+        # return H*0x0100 + L
+        address_L = (ComputationState.NULL_ADDRESS)*(1-condition) + (computation_state.data2*0x0100 + computation_state.data1)*condition
+        address_H = (ComputationState.NULL_ADDRESS)*(1-condition) + (computation_state.data2*0x0100 + byte(computation_state.data1 + 1))*condition
+        L = state.memory[address_L]
+        H = state.memory[address_H]
+        return (ComputationState.NULL_ADDRESS)*(1-condition) + (H*0x0100 + L)*condition
 
     def transition(self, state, computation_state):
-        value_at_address = state.memory[computation_state.address]
-        computation_state.value1 = (computation_state.value1)*(1-self.value1_from_A) + (state.A)*self.value1_from_A
-        computation_state.value1 = (computation_state.value1)*(1-self.value1_from_address) + value_at_address*self.value1_from_address
+        computation_state.value1 = ((state.A)*self.value1_from_A +
+                                    (computation_state.data1)*self.value1_from_zeropage +
+                                    Region_Wire.read_if(state, computation_state.data1, self.value1_from_zeropage_dereference) +
+                                    Region_Wire.read_if(state, computation_state.data2*0x0100 + computation_state.data1, self.value1_from_absolute_dereference) +
+                                    Region_Wire.indirect_x_dereference(state, computation_state, self.value1_from_indirect_x_dereference) +
+                                    Region_Wire.zeropage_x_dereference(state, computation_state, self.value1_from_zeropage_x) +
+                                    Region_Wire.zeropage_y_dereference(state, computation_state, self.value1_from_zeropage_y) +
+                                    Region_Wire.indirect_y_dereference(state, computation_state, self.value1_from_indirect_y_dereference) +
+                                    Region_Wire.absolute_y_dereference(state, computation_state, self.value1_from_absolute_y_dereference) +
+                                    Region_Wire.absolute_x_dereference(state, computation_state, self.value1_from_absolute_x_dereference))
+
+        computation_state.address = ((computation_state.data2*0x0100 + computation_state.data1)*self.address_from_absolute +
+                                     (computation_state.data1)*self.address_from_zeropage +
+                                     (Region_Wire.indirect_x_address(state, computation_state, self.address_from_indirect_x))*self.address_from_indirect_x +
+                                     (Region_Wire.indirect_y_address(state, computation_state, self.address_from_indirect_y))*self.address_from_indirect_y +
+                                     (Region_Wire.absolute_y_address(state, computation_state, self.address_from_absolute_y))*self.address_from_absolute_y +
+                                     (Region_Wire.zeropage_x_address(state, computation_state, self.address_from_zeropage_x))*self.address_from_zeropage_x +
+                                     (Region_Wire.zeropage_y_address(state, computation_state, self.address_from_zeropage_y))*self.address_from_zeropage_y +
+                                     (Region_Wire.absolute_address_indirect(state, computation_state, self.address_from_absolute_indirect))*self.address_from_absolute_indirect +
+                                     (Region_Wire.absolute_x_address(state, computation_state, self.address_from_absolute_x))*self.address_from_absolute_x)
 
 class Region_Rewire:
     def __init__(self, value1_keep=1, value1_from_A=0, value1_from_X=0, value1_from_Y=0,
@@ -354,9 +492,9 @@ class Region_AXY:
         self.Y_keep, self.Y_adjust, self.Y_value_adjust = Y_keep, Y_adjust, Y_value_adjust
 
     def transition(self, state, computation_state):
-        state.A = byte(state.A*self.A_keep + self.A_adjust + (computation_state.value)*self.A_value_adjust)
-        state.X = byte(state.X*self.X_keep + self.X_adjust + (computation_state.value)*self.X_value_adjust)
-        state.Y = byte(state.Y*self.Y_keep + self.Y_adjust + (computation_state.value)*self.Y_value_adjust)
+        state.A = byte(state.A*self.A_keep + self.A_adjust + (computation_state.value1)*self.A_value_adjust)
+        state.X = byte(state.X*self.X_keep + self.X_adjust + (computation_state.value1)*self.X_value_adjust)
+        state.Y = byte(state.Y*self.Y_keep + self.Y_adjust + (computation_state.value1)*self.Y_value_adjust)
 
 class Region_Compare:
     def __init__(self, A_compare=0, X_compare=0, Y_compare=0, value1_out=0, value3_from_carry=0):
@@ -375,7 +513,7 @@ class Region_Compare:
         computation_state.value3 = computation_state.value3*(1-self.value3_from_carry) + carry*self.value3_from_carry
 
 class RegionComposition:
-    def __init__(self, wire=Region_Wire(),
+    def __init__(self, # wire=Region_Wire(),
                        program_counter=Region_ProgramCounter(),
                        axy=Region_AXY(),
                        compare=Region_Compare(),
@@ -395,7 +533,7 @@ class RegionComposition:
                        write=Region_Write()):
 
         regions = [
-            (wire, Region_Wire),
+            # (wire, Region_Wire),
             (program_counter, Region_ProgramCounter),
             (axy, Region_AXY),
             (compare, Region_Compare),

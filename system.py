@@ -2,6 +2,8 @@
 import numpy as np
 import instructions
 
+import region
+
 #-
 
 PPU_CONTROL_1 = 0x2000
@@ -108,15 +110,16 @@ class State:
         return f'[cycle[{self.cycle}], operations[{self.operations_count}], h[{self.horizontal_scan}], v[{self.vertical_scan}]]'
 
     def state_string(self):
-        byte_count = 1 + bool(self.last_executed_data1) + bool(self.last_executed_data2)
+        # byte_count = 1 + bool(self.last_executed_data1) + bool(self.last_executed_data2)
+        byte_count = self.last_executed_byte_count
 
         # code = f"""{self.program_counter - byte_count:04X} {self.last_executed_opcode:02X} """
 
         code = f"""{self.previous_program_counter:04X} {self.last_executed_opcode:02X} """
 
-        if self.last_executed_data1 != None:
+        if byte_count > 1: # self.last_executed_data1 != None:
             code += f' {self.last_executed_data1:02X}'
-        if self.last_executed_data2 != None:
+        if byte_count > 2: # self.last_executed_data2 != None:
             code += f' {self.last_executed_data2:02X}'
 
         instruction = instructions.instructions[self.last_executed_opcode]
@@ -153,6 +156,8 @@ class State:
 
         elif addressing == instructions.absolute_address:
             return f'${data2*0x100 + data1:04X}'
+        elif addressing == instructions.absolute:
+            return f'${data2*0x100 + data1:04X}'
         elif addressing == instructions.absolute_address_dereference:
             return f'(${data2*0x100 + data1:04X})'
         elif addressing == instructions.relative_address:
@@ -163,9 +168,9 @@ class State:
         elif addressing in [instructions.zeropage_dereference, instructions.zeropage_address]:
             return f'${data1:02X}'
 
-        elif addressing in [instructions.absolute_x_dereference, instructions.absolute_x_address]:
+        elif addressing in [instructions.absolute_x, instructions.absolute_x_dereference, instructions.absolute_x_address]:
             return f'${data2*0x0100 + data1:04X},X'
-        elif addressing in [instructions.zeropage_x_dereference, instructions.zeropage_x_address]:
+        elif addressing in [instructions.zeropage_x, instructions.zeropage_x_dereference, instructions.zeropage_x_address]:
             return f'${data1:02X},X'
         elif addressing in [instructions.indirect_x_dereference, instructions.indirect_x_address]:
             return f'(${data1:02X},X)'
@@ -182,7 +187,7 @@ class State:
 
 
     def log_format(opcode, line):
-        _, byte_count, addressing = instructions.instructions[opcode]
+        _, byte_count, addressing, _ = instructions.instructions[opcode]
 
         if addressing == instructions.implied:
             return line[:2+byte_count] + line[-5:]
@@ -217,9 +222,9 @@ class State:
             self.operation_countdown -= 1
 
             if self.operation_countdown == 0:
-                operation, byte_count, addressing = instructions.instructions[opcode]
-                data1 = self.memory[self.program_counter+1] if byte_count > 1 else None
-                data2 = self.memory[self.program_counter+2] if byte_count > 2 else None
+                operation, byte_count, addressing, wire = instructions.instructions[opcode]
+                data1 = self.memory[self.program_counter+1] # if byte_count > 1 else None
+                data2 = self.memory[self.program_counter+2] # if byte_count > 2 else None
 
                 self.previous_program_counter = self.program_counter
                 self.program_counter += byte_count
@@ -230,30 +235,30 @@ class State:
                 self.previous_status = self.status_register_byte()
                 self.previous_stack_offset = self.stack_offset
 
-                import instructions as ins
-                import region
+                # if addressing in [ins.zeropage_address, ins.absolute_address, ins.absolute_address_dereference,
+                #                   ins.zeropage_x_address, ins.indirect_x_address, ins.absolute_x_address, 
+                #                   ins.zeropage_y_address, ins.indirect_y_address, ins.absolute_y_address]:
+                #     value1 = 0
+                #     address1 = addressing(self, data1, data2)
+                # else:
+                #     value1 = addressing(self, data1, data2)
+                #     address1 = region.ComputationState.NULL_ADDRESS
+                # region1 = operation(1, 1)
+                # if byte_count == 1:
+                #     region1.transition(self, region.ComputationState())
+                # else:
+                #     region1.transition(self, region.ComputationState(value1=value1, address=address1))
 
-                if addressing in [ins.zeropage_address, ins.absolute_address, ins.absolute_address_dereference,
-                                  ins.zeropage_x_address, ins.indirect_x_address, ins.absolute_x_address, 
-                                  ins.zeropage_y_address, ins.indirect_y_address, ins.absolute_y_address]:
-                    value1 = 0
-                    address1 = addressing(self, data1, data2)
-
-                else:
-                    value1 = addressing(self, data1, data2)
-                    address1 = region.ComputationState.NULL_ADDRESS
-
-                region1 = operation(1, 1)
-
-                if byte_count == 1:
-                    region1.transition(self, region.ComputationState())
-                else:
-                    region1.transition(self, region.ComputationState(value1=value1, address=address1))
+                computation_state = region.ComputationState(data0=opcode, data1=data1, data2=data2)
+                wire = wire or addressing()
+                wire.transition(self, computation_state)
+                operation(1, 1).transition(self, computation_state)
 
                 self.operations_count += 1
 
                 # diagnostic
                 self.last_executed_opcode = opcode
+                self.last_executed_byte_count = byte_count
                 self.last_executed_data1 = data1
                 self.last_executed_data2 = data2
 
@@ -358,7 +363,8 @@ class Memory:
         load_point = load_point or 0x8000
         self.state = state
 
-        self.array = np.zeros(0x10000, dtype=np.uint8)
+        null_address_margin = 2
+        self.array = np.zeros(0x10000 + null_address_margin, dtype=np.uint8)
         self.array[load_point:load_point+len(program_data)] = program_data
 
     def __getitem__(self, address):
@@ -373,6 +379,8 @@ class Memory:
             result = self.state.ppu.registers[address % 8]
         elif 0x4014 == address:
             result = self.state.ppu.dma_read()
+        elif address == region.ComputationState.NULL_ADDRESS:
+            result = self.array[region.ComputationState.NULL_ADDRESS]
         else:
             result = self.array[address & 0xFFFF]
 

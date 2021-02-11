@@ -105,14 +105,6 @@ byte_counts = {implied: 1, immediate: 2, relative_address: 2, zeropage_dereferen
                absolute_y_dereference: 3, absolute_y_address: 3}
 #-
 
-def Z_set(state, value):
-    state.Z = 1*(value == 0)
-
-def N_set(state, value):
-    state.N = 1*(value & 0x80 == 0x80)
-
-#-
-
 def SEI(state, a) -> [(0x78, implied)]:
     # state.status_register['Interrupt'] = 1
     return RegionComposition(flags=Region_Flags(I_keep=0, I_adjust=1))
@@ -159,11 +151,6 @@ def LDX(state, a) -> [(0xA2, immediate), (0xA6, zeropage_dereference), (0xAE, ab
         axy=Region_AXY(X_keep=0, X_adjust=0, X_value_adjust=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1))
-
-    # computation_state = ComputationState(value1=a)
-    # region.transition(state, computation_state)
-
-    return region
 
 def LDY(state, a) -> [(0xA0, immediate), (0xA4, zeropage_dereference), (0xAC, absolute_dereference),
                       (0xB4, zeropage_x_dereference), (0xBC, absolute_x_dereference)]:
@@ -243,7 +230,6 @@ def BIT_zpg(state, a) -> [(0x24, zeropage_dereference)]:
     # state.status_register['Negative'] = (a >> 7) & 0x01
     # state.status_register['Overflow'] = (a >> 6) & 0x01
     # Z_set(state, byte(state.A & a))
-
     return RegionComposition(
         boolean_logic=Region_BooleanLogic(AND_A=1, A_wire=0, value3_wire=1),
         rewire=Region_Rewire(value2_keep=0, value2_from_bit6=1),
@@ -260,7 +246,6 @@ def CMP(state, a) -> [(0xC1, indirect_x_dereference), (0xC5, zeropage_dereferenc
     #     state.status_register['Carry'] = 1
     # else:
     #     state.status_register['Carry'] = 0
-
     return RegionComposition(
         compare=Region_Compare(A_compare=1, value1_out=1, value3_from_carry=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
@@ -274,7 +259,6 @@ def CPX(state, a) -> [(0xE0, immediate), (0xE4, zeropage_dereference), (0xEC, ab
     #     state.status_register['Carry'] = 1
     # else:
     #     state.status_register['Carry'] = 0
-
     return RegionComposition(
         compare=Region_Compare(X_compare=1, value1_out=1, value3_from_carry=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
@@ -288,7 +272,6 @@ def CPY(state, a) -> [(0xC0, immediate), (0xC4, zeropage_dereference), (0xCC, ab
     #     state.status_register['Carry'] = 1
     # else:
     #     state.status_register['Carry'] = 0
-
     return RegionComposition(
         compare=Region_Compare(Y_compare=1, value1_out=1, value3_from_carry=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
@@ -448,31 +431,39 @@ def ROR_zpg(state, a) -> [(0x66, zeropage_address), (0x6E, absolute_address), (0
 def ADC(state, a) -> [(0x61, indirect_x_dereference), (0x65, zeropage_dereference), (0x69, immediate),
                       (0x6D, absolute_dereference), (0x71, indirect_y_dereference), (0x75, zeropage_x_dereference),
                       (0x79, absolute_y_dereference), (0x7D, absolute_x_dereference)]:
-    result = state.A + a + state.C
-
-    Z_set(state, byte(result))
-    N_set(state, byte(result))
-    state.C = 1*(result & 0xFF00 > 0)
-
-    v1 =  ~(state.A ^ a) & (state.A ^ result) & 0x0080
-    state.O = 1*(v1 > 0)
-
-    state.A = byte(result)
+    # result = state.A + a + state.C
+    # Z_set(state, byte(result))
+    # N_set(state, byte(result))
+    # state.C = 1*(result & 0xFF00 > 0)
+    # v1 =  ~(state.A ^ a) & (state.A ^ result) & 0x0080
+    # state.O = 1*(v1 > 0)
+    # state.A = byte(result)
+    return RegionComposition(
+        adc_sbc=Region_ADC_SBC(value1_from_ADC=1, value2_from_overflow=1, value3_from_carry=1),
+        rewire=Region_Rewire(A_from_value1=1),
+        flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
+                           O_keep=0, O_adjust=0, O_adjust_source=Wire.VALUE2,
+                           Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1,
+                           C_keep=0, C_adjust=0, C_adjust_direct=Wire.VALUE3))
 
 def SBC(state, a) -> [(0xE1, indirect_x_dereference), (0xE5, zeropage_dereference), (0xE9, immediate), (0xEB, immediate),
                       (0xED, absolute_dereference), (0xF1, indirect_y_dereference), (0xF5, zeropage_x_dereference),
                       (0xF9, absolute_y_dereference), (0xFD, absolute_x_dereference)]:
-    a ^= 0xFF
-    result = state.A + a + state.C
-
-    Z_set(state, byte(result))
-    N_set(state, byte(result))
-    state.C = 1*(result & 0xFF00 > 0)
-
-    v1 =  ~(state.A ^ a) & (state.A ^ result) & 0x0080
-    state.O = 1*(v1 > 0)
-
-    state.A = byte(result)
+    # a ^= 0xFF
+    # result = state.A + a + state.C
+    # Z_set(state, byte(result))
+    # N_set(state, byte(result))
+    # state.C = 1*(result & 0xFF00 > 0)
+    # v1 =  ~(state.A ^ a) & (state.A ^ result) & 0x0080
+    # state.O = 1*(v1 > 0)
+    # state.A = byte(result)
+    return RegionComposition(
+        adc_sbc=Region_ADC_SBC(value1_from_SBC=1, value2_from_overflow=1, value3_from_carry=1),
+        rewire=Region_Rewire(A_from_value1=1),
+        flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
+                           O_keep=0, O_adjust=0, O_adjust_source=Wire.VALUE2,
+                           Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1,
+                           C_keep=0, C_adjust=0, C_adjust_direct=Wire.VALUE3))
 
 def STA(state, a) -> [(0x81, indirect_x_address), (0x8D, absolute_address), (0x85, zeropage_address),
                       (0x91, indirect_y_address), (0x95, zeropage_x_address), (0x99, absolute_y_address),
@@ -487,9 +478,6 @@ def STX(state, a) -> [(0x86, zeropage_address), (0x8E, absolute_address), (0x96,
     return RegionComposition(
         rewire=Region_Rewire(value1_from_X=1),
         write=Region_Write(address_write=1))
-
-    # computation_state = ComputationState(value1=state.X, address=a)
-    # region.transition(state, computation_state)
 
 def STY(state, a) -> [(0x84, zeropage_address), (0x8C, absolute_address), (0x94, zeropage_x_address)]:
     # state.memory[a] = state.Y
@@ -576,27 +564,10 @@ def JMP(state, a) -> [(0x4C, absolute_address), (0x6C, absolute_address_derefere
     # state.program_counter = a
     return RegionComposition(program_counter=Region_ProgramCounter(PC_keep=0, PC_address_adjust=1))
 
-    # computation_state = ComputationState(value1=a)
-    # region.transition(state, computation_state)
-
 def BVS(state, a) -> [(0x70, relative_address)]:
     # if state.status_register['Overflow'] == 1:
     #     state.program_counter += np.int8(a)
     return RegionComposition(branch=Region_Branch(flag_match=1, O_flag_branch=1))
-
-def JSR(state, a) -> [(0x20, absolute_address)]:
-    # Stack is from range 0x0100-0x1FF and grows down from 0x0100 + 0xFD.
-    # Adjust for current program counter incrementing.
-    program_counter = state.program_counter - 1
-    pc_H = program_counter >> 8
-    pc_L = program_counter & 0x00FF
-
-    state.memory[STACK_ZERO + state.stack_offset] = pc_H
-    state.stack_offset -= 1
-    state.memory[STACK_ZERO + state.stack_offset] = pc_L
-    state.stack_offset -= 1
-
-    state.program_counter = a
 
 def BRK(state, a) -> [(0x00, implied)]:
     assert False, True
@@ -623,35 +594,47 @@ def NMI(state):
 
     JSR(state, data)
 
+def JSR(state, a) -> [(0x20, absolute_address)]:
+    # Stack is from range 0x0100-0x1FF and grows down from 0x0100 + 0xFD.
+    # Adjust for current program counter incrementing.
+    # program_counter = state.program_counter - 1
+    # pc_H = program_counter >> 8
+    # pc_L = program_counter & 0x00FF
+    # state.memory[STACK_ZERO + state.stack_offset] = pc_H
+    # state.stack_offset -= 1
+    # state.memory[STACK_ZERO + state.stack_offset] = pc_L
+    # state.stack_offset -= 1
+    # state.program_counter = a
+    return RegionComposition(
+        jsr_rts_rti=Region_JSR_RTS_RTI(jsr_OK=1))
+
 def RTI(state, a) -> [(0x40, implied)]:
-    state.stack_offset += 1
-    status_register = state.memory[STACK_ZERO + state.stack_offset]
-    status_register = Behaviors.read_special_status_bits_on_pull(state, status_register)
-    state.status_register_byte_set(status_register)
-
-    state.stack_offset += 1
-    pc_L = state.memory[STACK_ZERO + state.stack_offset]
-    state.stack_offset += 1
-    pc_H = state.memory[STACK_ZERO + state.stack_offset]
-
-    program_counter = (pc_H <<8) + pc_L
-    state.program_counter = program_counter
+    # state.stack_offset += 1
+    # status_register = state.memory[STACK_ZERO + state.stack_offset]
+    # status_register = Behaviors.read_special_status_bits_on_pull(state, status_register)
+    # state.status_register_byte_set(status_register)
+    # state.stack_offset += 1
+    # pc_L = state.memory[STACK_ZERO + state.stack_offset]
+    # state.stack_offset += 1
+    # pc_H = state.memory[STACK_ZERO + state.stack_offset]
+    # program_counter = (pc_H <<8) + pc_L
+    # state.program_counter = program_counter
+    return RegionComposition(
+        jsr_rts_rti=Region_JSR_RTS_RTI(rti_OK=1))
 
 def RTS(state, a) -> [(0x60, implied)]:
-    state.stack_offset += 1
-    pc_L = state.memory[STACK_ZERO + state.stack_offset]
-    state.stack_offset += 1
-    pc_H = state.memory[STACK_ZERO + state.stack_offset]
-
-    program_counter = (pc_H << 8) + pc_L
-
-    # Adjust for current program counter incrementing.
-    state.program_counter = program_counter + 1
+    # state.stack_offset += 1
+    # pc_L = state.memory[STACK_ZERO + state.stack_offset]
+    # state.stack_offset += 1
+    # pc_H = state.memory[STACK_ZERO + state.stack_offset]
+    # program_counter = (pc_H << 8) + pc_L
+    # state.program_counter = program_counter + 1
+    return RegionComposition(
+        jsr_rts_rti=Region_JSR_RTS_RTI(rts_OK=1))
 
 def PHA(state, a) -> [(0x48, implied)]:
     # state.memory[STACK_ZERO + state.stack_offset] = state.A
     # state.stack_offset -= 1
-
     return RegionComposition(
         rewire=Region_Rewire(value1_from_A=1),
         stack_write=Region_StackWrite(write_from_value1=1),
@@ -660,12 +643,9 @@ def PHA(state, a) -> [(0x48, implied)]:
 def PHP(state, a) -> [(0x08, implied)]:
     # status_register = state.status_register_byte()
     # status_register = Behaviors.write_special_status_bits_on_push(PHP, status_register)
-
     # state.memory[STACK_ZERO + state.stack_offset] = status_register
     # state.stack_offset -= 1
-
     return RegionComposition(
-        # stack=Region_Stack(offset_keep=1, offset_adjust=-1, address_wire=0),
         rewire=Region_Rewire(value1_from_P_push_bits=1),
         stack_write=Region_StackWrite(write_from_value1=1),
         stack_offset2=Region_StackOffset(offset_keep=1, offset_adjust=-1)
@@ -674,10 +654,8 @@ def PHP(state, a) -> [(0x08, implied)]:
 def PLA(state, a) -> [(0x68, implied)]:
     # state.stack_offset += 1
     # state.A = state.memory[STACK_ZERO + state.stack_offset]
-
     # Z_set(state, state.A)
     # N_set(state, state.A)
-
     return RegionComposition(
         stack_offset1=Region_StackOffset(offset_keep=1, offset_adjust=1),
         stack_read=Region_StackRead(value1_from_read=1),
@@ -690,17 +668,16 @@ def PLP(state, a) -> [(0x28, implied)]:
     # data = state.memory[STACK_ZERO + state.stack_offset]
     # data = Behaviors.read_special_status_bits_on_pull(state, data)
     # state.status_register_byte_set(data)
-
     return RegionComposition(
         stack_offset1=Region_StackOffset(offset_keep=1, offset_adjust=1),
         stack_read=Region_StackRead(value1_from_read=1, read_special_status_bits=1),
-        flags_byte=Region_FlagsByte(set_from_value1=1)
-    )
+        flags_byte=Region_FlagsByte(set_from_value1=1))
 
 #-
 
 def LAX(state, a) -> [(0xA3, indirect_x_dereference), (0xA7, zeropage_dereference), (0xAF, absolute_dereference),
                       (0xB3, indirect_y_dereference), (0xB7, zeropage_y_dereference), (0xBF, absolute_y_dereference)]:
+    assert None, "The End"
     LDA(state, a)
     TAX(state, a)
 

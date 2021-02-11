@@ -115,6 +115,72 @@ class Region_Arithmetic:
     def transition(self, state, computation_state):
         computation_state.value1 = byte((computation_state.value1) + self.value1_increment)
 
+class Region_ADC_SBC:
+    def __init__(self, value1_from_ADC=0, value1_from_SBC=0, value2_from_overflow=0, value3_from_carry=0):
+        self.value1_from_ADC = value1_from_ADC
+        self.value1_from_SBC = value1_from_SBC
+        self.value2_from_overflow = value2_from_overflow
+        self.value3_from_carry = value3_from_carry
+
+    def transition(self, state, computation_state):
+        value1 = (computation_state.value1)*(1-self.value1_from_SBC) + (computation_state.value1 ^ 0xFF)*self.value1_from_SBC
+        result = state.A + value1 + state.C
+        new_carry = result > 0xFF
+        result = byte(result)
+
+        v1 =  ~(state.A ^ value1) & (state.A ^ result) & 0x80
+        overflow = v1 > 0
+
+        any_ = self.value1_from_ADC + self.value1_from_SBC
+        computation_state.value1 = (computation_state.value1)*(1-any_) + (result)*any_
+        computation_state.value2 = (computation_state.value2)*(1-self.value2_from_overflow) + (overflow)*self.value2_from_overflow
+        computation_state.value3 = (computation_state.value3)*(1-self.value3_from_carry) + (new_carry)*self.value3_from_carry
+
+class Region_JSR_RTS_RTI:
+    def __init__(self, jsr_OK=0, rts_OK=0, rti_OK=0):
+        self.jsr_OK = jsr_OK
+        self.rts_OK = rts_OK
+        self.rti_OK = rti_OK
+
+    def transition(self, state, computation_state):
+        program_counter = state.program_counter + (-1)*self.jsr_OK
+        pc_H = program_counter >> 8
+        pc_L = program_counter & 0x00FF
+
+        any_rt = self.rts_OK + self.rti_OK
+        pre_offset = self.rts_OK + self.rti_OK
+        post_offset = -self.jsr_OK
+
+        state.stack_offset += self.rti_OK
+        read_address = (ComputationState.NULL_ADDRESS)*(1-self.rti_OK) + (STACK_ZERO + state.stack_offset)*self.rti_OK
+        new_status = (state.memory[read_address])*self.rti_OK
+        new_status = behaviors.Behaviors.read_special_status_bits_on_pull(state, new_status, is_PLP_or_RTI=self.rti_OK)
+        new_status = (state.status_register_byte())*(1-self.rti_OK) + (new_status)*self.rti_OK
+        state.status_register_byte_set(new_status)
+
+        state.stack_offset += pre_offset
+
+        write_address = (ComputationState.NULL_ADDRESS)*(1-self.jsr_OK) + (STACK_ZERO + state.stack_offset)*self.jsr_OK
+        read_address = (ComputationState.NULL_ADDRESS)*(1-any_rt) + (STACK_ZERO + state.stack_offset)*any_rt
+        state.memory[write_address] = pc_H
+        pc_L = (pc_L)*(1-any_rt) + (state.memory[read_address])*any_rt
+
+        state.stack_offset += pre_offset
+        state.stack_offset += post_offset
+
+        write_address = (ComputationState.NULL_ADDRESS)*(1-self.jsr_OK) + (STACK_ZERO + state.stack_offset)*self.jsr_OK
+        read_address = (ComputationState.NULL_ADDRESS)*(1-any_rt) + (STACK_ZERO + state.stack_offset)*any_rt
+        state.memory[write_address] = pc_L
+        pc_H = (pc_H)*(1-any_rt) + (state.memory[read_address])*any_rt
+
+        state.stack_offset += post_offset
+
+        any_ = self.jsr_OK + self.rts_OK + self.rti_OK
+        new_program_counter = (program_counter)*(1-any_) + (computation_state.address)*self.jsr_OK + ((pc_H << 8) + pc_L)*any_rt
+        new_program_counter = new_program_counter + (1)*self.rts_OK
+
+        state.program_counter = (state.program_counter)*(1-any_) + (new_program_counter)*any_
+
 class Region_BitShift:
     def __init__(self, right_shift=0, right_rotate=0,
                  left_shift=0, left_rotate=0,
@@ -187,7 +253,7 @@ class Region_StackRead:
 
     def transition(self, state, computation_state):
         computation_state.value1 = computation_state.value1*(1-self.value1_from_read) + (state.memory[STACK_ZERO + state.stack_offset])*self.value1_from_read
-        special_status_bits = behaviors.Behaviors.read_special_status_bits_on_pull(state, computation_state.value1)
+        special_status_bits = behaviors.Behaviors.read_special_status_bits_on_pull(state, computation_state.value1, is_PLP_or_RTI=self.read_special_status_bits)
         computation_state.value1 = computation_state.value1*(1-self.read_special_status_bits) + (special_status_bits)*self.read_special_status_bits
 
 class Region_StackWrite:
@@ -317,6 +383,8 @@ class RegionComposition:
                        stack_read=Region_StackRead(),
                        boolean_logic=Region_BooleanLogic(),
                        arithmetic=Region_Arithmetic(),
+                       adc_sbc=Region_ADC_SBC(),
+                       jsr_rts_rti=Region_JSR_RTS_RTI(),
                        bit_shift=Region_BitShift(),
                        rewire=Region_Rewire(),
                        branch=Region_Branch(),
@@ -335,6 +403,8 @@ class RegionComposition:
             (stack_read, Region_StackRead),
             (boolean_logic, Region_BooleanLogic),
             (arithmetic, Region_Arithmetic),
+            (adc_sbc, Region_ADC_SBC),
+            (jsr_rts_rti, Region_JSR_RTS_RTI),
             (bit_shift, Region_BitShift),
             (rewire, Region_Rewire),
             (branch, Region_Branch),

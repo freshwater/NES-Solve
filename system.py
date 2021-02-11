@@ -233,12 +233,9 @@ class State:
                 import instructions as ins
                 import region
 
-                # print(operation.__name__, end=' * ')
-
                 if addressing in [ins.zeropage_address, ins.absolute_address, ins.absolute_address_dereference,
                                   ins.zeropage_x_address, ins.indirect_x_address, ins.absolute_x_address, 
                                   ins.zeropage_y_address, ins.indirect_y_address, ins.absolute_y_address]:
-                    print('_')
                     value1 = 0
                     address1 = addressing(self, data1, data2)
 
@@ -246,21 +243,12 @@ class State:
                     value1 = addressing(self, data1, data2)
                     address1 = region.ComputationState.NULL_ADDRESS
 
-                if operation.__name__ in ['JSR', 'RTS', 'RTI']:
-                    operation(self, address1)
+                region1 = operation(1, 1)
 
-                elif operation.__name__ in ['ADC', 'SBC']:
-                    operation(self, value1)
-
+                if byte_count == 1:
+                    region1.transition(self, region.ComputationState())
                 else:
-                    # operation(self, value1)
-                    # print(operation.__name__, addressing.__name__, value1, f'{address1:04X}')
-                    region1 = operation(1, 1)
-
-                    if byte_count == 1:
-                        region1.transition(self, region.ComputationState())
-                    else:
-                        region1.transition(self, region.ComputationState(value1=value1, address=address1))
+                    region1.transition(self, region.ComputationState(value1=value1, address=address1))
 
                 self.operations_count += 1
 

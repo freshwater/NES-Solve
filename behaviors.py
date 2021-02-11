@@ -29,7 +29,7 @@ class Behaviors:
         return status_register | 0x20 | (0x10 if is_PHP_or_BRK else 0x00)
 
 
-    def read_special_status_bits_on_pull(state, data):
+    def read_special_status_bits_on_pull(state, data, is_PLP_or_RTI):
         """
         https://wiki.nesdev.com/w/index.php/Status_flags#The_B_flag
         Two instructions (PLP and RTI) pull a byte from the stack and set all
@@ -39,5 +39,5 @@ class Behaviors:
         data &= (0xFF - 0x30)
         data |= bits
 
-        return data
+        return (state.status_register_byte())*(1-is_PLP_or_RTI) + (data)*is_PLP_or_RTI
 

@@ -13,14 +13,16 @@ STACK_ZERO = 0x0100
 class ComputationState:
     NULL_ADDRESS = -2
     def __init__(self, data0, data1, data2,
-                       address=NULL_ADDRESS,
-                       value1=0, value2=0, value3=0):
+                 address=NULL_ADDRESS,
+                 value1=0, value2=0, value3=0):
         self.data0 = data0
         self.data1 = data1
         self.data2 = data2
+
         self.value1 = value1
         self.value2 = value2
         self.value3 = value3
+
         self.address = address
 
     def __str__(self):
@@ -269,7 +271,8 @@ class Region_StackWrite:
         state.memory[address] = computation_state.value1
 
 class Region_Wire:
-    def __init__(self, value1_from_A=0, value1_from_address=0, value1_from_zeropage=0,
+    def __init__(self, value1_from_A=0, value1_from_X=0, value1_from_Y=0,
+                 value1_from_address=0, value1_from_zeropage=0,
                  value1_from_zeropage_dereference=0, value1_from_absolute_dereference=0,
                  value1_from_indirect_x_dereference=0, value1_from_indirect_y_dereference=0,
                  value1_from_zeropage_x=0, value1_from_absolute_y_dereference=0,
@@ -280,6 +283,8 @@ class Region_Wire:
                  address_from_zeropage_y=0, address_from_absolute_indirect=0,
                  address_from_absolute_x=0):
         self.value1_from_A = value1_from_A
+        self.value1_from_X = value1_from_X
+        self.value1_from_Y = value1_from_Y
         self.value1_from_address = value1_from_address
         self.value1_from_zeropage = value1_from_zeropage
         self.value1_from_zeropage_dereference = value1_from_zeropage_dereference
@@ -392,6 +397,8 @@ class Region_Wire:
 
     def transition(self, state, computation_state):
         computation_state.value1 = ((state.A)*self.value1_from_A +
+                                    (state.X)*self.value1_from_X +
+                                    (state.Y)*self.value1_from_Y +
                                     (computation_state.data1)*self.value1_from_zeropage +
                                     Region_Wire.read_if(state, computation_state.data1, self.value1_from_zeropage_dereference) +
                                     Region_Wire.read_if(state, computation_state.data2*0x0100 + computation_state.data1, self.value1_from_absolute_dereference) +
@@ -417,11 +424,9 @@ class Region_Rewire:
                        value1_from_P_push_bits=0, value1_from_stack_offset=0,
                        value2_keep=1, value2_from_bit6=0,
                        A_from_value1=0, A_from_X=0, A_from_Y=0,
-                       X_from_A=0, X_from_stack_offset=0,
-                       Y_from_A=0,
-                       stack_offset_from_X=0
-                       ):
-        # self.value1_keep = value1_keep
+                       X_from_value1=0, X_from_A=0, X_from_stack_offset=0,
+                       Y_from_value1=0, Y_from_A=0,
+                       stack_offset_from_X=0):
         self.value1_keep = value1_keep
         self.value1_from_A = value1_from_A
         self.value1_from_X = value1_from_X
@@ -436,9 +441,11 @@ class Region_Rewire:
         self.A_from_X = A_from_X
         self.A_from_Y = A_from_Y
 
+        self.X_from_value1 = X_from_value1
         self.X_from_A = X_from_A
         self.X_from_stack_offset = X_from_stack_offset
 
+        self.Y_from_value1 = Y_from_value1
         self.Y_from_A = Y_from_A
 
         self.stack_offset_from_X = stack_offset_from_X
@@ -459,12 +466,14 @@ class Region_Rewire:
                                      (state.X)*self.A_from_X + 
                                      (state.Y)*self.A_from_Y)
 
-        any_X = self.X_from_A + self.X_from_stack_offset
+        any_X = self.X_from_A + self.X_from_stack_offset + self.X_from_value1
         new_X = state.X*(1-any_X) + ((state.A)*self.X_from_A +
-                                     (state.stack_offset)*self.X_from_stack_offset)
+                                     (state.stack_offset)*self.X_from_stack_offset +
+                                     (computation_state.value1)*self.X_from_value1)
 
-        any_Y = self.Y_from_A
-        new_Y = state.Y*(1-any_Y) + (state.A)*self.Y_from_A
+        any_Y = self.Y_from_A + self.Y_from_value1
+        new_Y = state.Y*(1-any_Y) + ((state.A)*self.Y_from_A +
+                                     (computation_state.value1)*self.Y_from_value1)
 
         new_stack_offset = state.stack_offset*(1-self.stack_offset_from_X) + (state.X)*self.stack_offset_from_X
 
@@ -483,19 +492,6 @@ class Region_Write:
         address = ComputationState.NULL_ADDRESS*(1-self.address_write) + computation_state.address*self.address_write
         state.memory[address] = computation_state.value1
 
-class Region_AXY:
-    def __init__(self, A_keep=1, A_adjust=0, A_value_adjust=0,
-                       X_keep=1, X_adjust=0, X_value_adjust=0,
-                       Y_keep=1, Y_adjust=0, Y_value_adjust=0):
-        self.A_keep, self.A_adjust, self.A_value_adjust = A_keep, A_adjust, A_value_adjust
-        self.X_keep, self.X_adjust, self.X_value_adjust = X_keep, X_adjust, X_value_adjust
-        self.Y_keep, self.Y_adjust, self.Y_value_adjust = Y_keep, Y_adjust, Y_value_adjust
-
-    def transition(self, state, computation_state):
-        state.A = byte(state.A*self.A_keep + self.A_adjust + (computation_state.value1)*self.A_value_adjust)
-        state.X = byte(state.X*self.X_keep + self.X_adjust + (computation_state.value1)*self.X_value_adjust)
-        state.Y = byte(state.Y*self.Y_keep + self.Y_adjust + (computation_state.value1)*self.Y_value_adjust)
-
 class Region_Compare:
     def __init__(self, A_compare=0, X_compare=0, Y_compare=0, value1_out=0, value3_from_carry=0):
         self.A_compare = A_compare
@@ -513,9 +509,7 @@ class Region_Compare:
         computation_state.value3 = computation_state.value3*(1-self.value3_from_carry) + carry*self.value3_from_carry
 
 class RegionComposition:
-    def __init__(self, # wire=Region_Wire(),
-                       program_counter=Region_ProgramCounter(),
-                       axy=Region_AXY(),
+    def __init__(self, program_counter=Region_ProgramCounter(),
                        compare=Region_Compare(),
                        stack_offset1=Region_StackOffset(),
                        stack_read=Region_StackRead(),
@@ -535,7 +529,6 @@ class RegionComposition:
         regions = [
             # (wire, Region_Wire),
             (program_counter, Region_ProgramCounter),
-            (axy, Region_AXY),
             (compare, Region_Compare),
             (stack_offset1, Region_StackOffset),
             (stack_read, Region_StackRead),

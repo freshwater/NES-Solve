@@ -235,24 +235,10 @@ class State:
                 self.previous_status = self.status_register_byte()
                 self.previous_stack_offset = self.stack_offset
 
-                # if addressing in [ins.zeropage_address, ins.absolute_address, ins.absolute_address_dereference,
-                #                   ins.zeropage_x_address, ins.indirect_x_address, ins.absolute_x_address, 
-                #                   ins.zeropage_y_address, ins.indirect_y_address, ins.absolute_y_address]:
-                #     value1 = 0
-                #     address1 = addressing(self, data1, data2)
-                # else:
-                #     value1 = addressing(self, data1, data2)
-                #     address1 = region.ComputationState.NULL_ADDRESS
-                # region1 = operation(1, 1)
-                # if byte_count == 1:
-                #     region1.transition(self, region.ComputationState())
-                # else:
-                #     region1.transition(self, region.ComputationState(value1=value1, address=address1))
-
                 computation_state = region.ComputationState(data0=opcode, data1=data1, data2=data2)
                 wire = wire or addressing()
                 wire.transition(self, computation_state)
-                operation(1, 1).transition(self, computation_state)
+                operation().transition(self, computation_state)
 
                 self.operations_count += 1
 

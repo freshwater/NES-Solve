@@ -589,7 +589,7 @@ def BVC() -> [(0x50, relative_address)]:
 
 def JMP() -> [(0x4C, absolute_address), (0x6C, absolute_address_dereference)]:
     # state.program_counter = a
-    return RegionComposition(program_counter=Region_ProgramCounter(PC_keep=0, PC_address_adjust=1))
+    return RegionComposition(rewire=Region_Rewire(program_counter_from_address=1))
 
 def BVS() -> [(0x70, relative_address)]:
     # if state.status_register['Overflow'] == 1:
@@ -775,3 +775,41 @@ for index, count in enumerate(all_):
     if count != 1:
         print(f'0x{index:02X}', count)
         assert False, False
+
+if __name__ == '__main__':
+    operations = []
+    operation_info = []
+
+    operations_begin = """__device__\nconst RegionComposition instructions[] = {\n    """
+    operations_end = "\n};"
+    operation_info_begin = """OperationInformation operation_info[] = {\n    """
+    operation_info_end = """\n};"""
+
+    format_types = {
+        immediate: "Immediate",
+        absolute_address: "Absolute",
+        zeropage_address: "Zeropage"
+    }
+
+    for opcode in range(256):
+        if opcode in [0x4C, 0xA2, 0x86]:
+            operation, byte_count, addressing, wire = instructions[opcode]
+            region = operation()
+            wire = wire or addressing()
+
+            pc_increment = byte_count
+            if opcode in [0x4C]:
+                pc_increment = 0
+
+            operations.append(f'/*0x{opcode:02X}*//*{operation.__name__}*/{region.struct(wire_region=wire, byte_count=pc_increment)}')
+            operation_info.append(f'/*0x{opcode:02X}*//*{operation.__name__}*/OperationInformation{{.name="{operation.__name__}", .byte_count={byte_count}, .format_type="{format_types[addressing]}"}}')
+
+        else:
+            operations.append(f'/*0x{opcode:02X}*//*NOP*/RegionComposition{{}}')
+            operation_info.append(f'/*0x{opcode:02X}*//*NOP*/OperationInformation{{}}')
+
+    operations_text = operations_begin + ',\n    '.join(operations) + operations_end
+    operation_info_text = operation_info_begin + ',\n    '.join(operation_info) + operation_info_end
+
+    with open('_instructions.h', 'w') as file:
+        file.write('\n' + operations_text + '\n\n' + operation_info_text + '\n')

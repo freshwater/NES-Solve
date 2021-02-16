@@ -215,14 +215,6 @@ class Region_BitShift:
         computation_state.value1 = (computation_state.value1)*(1-self.value1_out) + (new_)*self.value1_out
         computation_state.value3 = (computation_state.value3)*(1-self.value3_from_carry) + (new_carry)*self.value3_from_carry
 
-class Region_ProgramCounter:
-    def __init__(self, PC_keep=1, PC_address_adjust=0):
-        self.PC_keep = PC_keep
-        self.PC_address_adjust = PC_address_adjust
-
-    def transition(self, state, computation_state):
-        state.program_counter = state.program_counter*self.PC_keep + (computation_state.address)*self.PC_address_adjust
-
 class Region_Branch:
     def __init__(self, flag_match=0,
                  N_flag_branch=0,
@@ -419,6 +411,11 @@ class Region_Wire:
                                      (Region_Wire.absolute_address_indirect(state, computation_state, self.address_from_absolute_indirect))*self.address_from_absolute_indirect +
                                      (Region_Wire.absolute_x_address(state, computation_state, self.address_from_absolute_x))*self.address_from_absolute_x)
 
+    def __str__(self):
+        return ' '.join(f'''Region_Wire{{.value1_from_data1={self.value1_from_zeropage},
+                                         .value1_from_X={self.value1_from_X},
+                                         .address_from_absolute={self.address_from_absolute}}}'''.split())
+
 class Region_Rewire:
     def __init__(self, value1_keep=1, value1_from_A=0, value1_from_X=0, value1_from_Y=0,
                        value1_from_P_push_bits=0, value1_from_stack_offset=0,
@@ -426,6 +423,7 @@ class Region_Rewire:
                        A_from_value1=0, A_from_X=0, A_from_Y=0,
                        X_from_value1=0, X_from_A=0, X_from_stack_offset=0,
                        Y_from_value1=0, Y_from_A=0,
+                       program_counter_from_address=0,
                        stack_offset_from_X=0):
         self.value1_keep = value1_keep
         self.value1_from_A = value1_from_A
@@ -448,6 +446,7 @@ class Region_Rewire:
         self.Y_from_value1 = Y_from_value1
         self.Y_from_A = Y_from_A
 
+        self.program_counter_from_address = program_counter_from_address
         self.stack_offset_from_X = stack_offset_from_X
 
     def transition(self, state, computation_state):
@@ -475,6 +474,7 @@ class Region_Rewire:
         new_Y = state.Y*(1-any_Y) + ((state.A)*self.Y_from_A +
                                      (computation_state.value1)*self.Y_from_value1)
 
+        new_program_counter = (state.program_counter)*(1-self.program_counter_from_address) + (computation_state.address)*self.program_counter_from_address
         new_stack_offset = state.stack_offset*(1-self.stack_offset_from_X) + (state.X)*self.stack_offset_from_X
 
         computation_state.value1 = new_value1
@@ -482,7 +482,12 @@ class Region_Rewire:
         state.A = new_A
         state.X = new_X
         state.Y = new_Y
+        state.program_counter = new_program_counter
         state.stack_offset = new_stack_offset
+
+    def __str__(self):
+        return ' '.join(f'''Region_Rewire{{.X_from_value1={self.X_from_value1},
+                                  .program_counter_from_address={self.program_counter_from_address}}}'''.split())
 
 class Region_Write:
     def __init__(self, address_write=0):
@@ -491,6 +496,9 @@ class Region_Write:
     def transition(self, state, computation_state):
         address = ComputationState.NULL_ADDRESS*(1-self.address_write) + computation_state.address*self.address_write
         state.memory[address] = computation_state.value1
+
+    def __str__(self):
+        return ' '.join(f'''Region_Write{{.address_write={self.address_write}}}'''.split())
 
 class Region_Compare:
     def __init__(self, A_compare=0, X_compare=0, Y_compare=0, value1_out=0, value3_from_carry=0):
@@ -508,9 +516,16 @@ class Region_Compare:
         computation_state.value1 = computation_state.value1*(1-self.value1_out) + result*self.value1_out
         computation_state.value3 = computation_state.value3*(1-self.value3_from_carry) + carry*self.value3_from_carry
 
+class Region_ProgramCounter:
+    def __init__(self, PC_increment=0):
+        self.PC_increment = PC_increment
+
+    def __str__(self):
+        return ' '.join(f'''Region_ProgramCounter{{.PC_increment={self.PC_increment}}}'''.split())
+
+
 class RegionComposition:
-    def __init__(self, program_counter=Region_ProgramCounter(),
-                       compare=Region_Compare(),
+    def __init__(self, compare=Region_Compare(),
                        stack_offset1=Region_StackOffset(),
                        stack_read=Region_StackRead(),
                        boolean_logic=Region_BooleanLogic(),
@@ -528,7 +543,6 @@ class RegionComposition:
 
         regions = [
             # (wire, Region_Wire),
-            (program_counter, Region_ProgramCounter),
             (compare, Region_Compare),
             (stack_offset1, Region_StackOffset),
             (stack_read, Region_StackRead),
@@ -552,3 +566,13 @@ class RegionComposition:
     def transition(self, state, computation_state):
         for region in self.regions:
             region.transition(state, computation_state)
+
+    def struct(self, wire_region, byte_count):
+        regions = [
+            ("wire", wire_region),
+            ("rewire", self.regions[8]),
+            ("write", self.regions[14]),
+            ("program_counter", Region_ProgramCounter(PC_increment=byte_count))
+        ]
+
+        return 'RegionComposition{' + ', '.join(f'.{name}=' + str(region) for name, region in regions) + '}'

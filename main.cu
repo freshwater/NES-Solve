@@ -8,12 +8,12 @@
 #define NULL_ADDRESS_MARGIN 4
 #define NULL_ADDRESS_READ (0x10000 + 0)
 #define NULL_ADDRESS_WRITE (0x10000 + 2)
+#define STACK_ZERO 0x0100
 
 typedef const uint32_t flag_t;
 typedef const uint32_t int_t;
 typedef uint32_t int16u_t;
 typedef uint32_t int8u_t;
-typedef uint8_t int8u_memory_t;
 
 struct SystemState;
 struct ComputationState;
@@ -35,11 +35,9 @@ void operationTransition(uint8_t opcode, SystemState* state, ComputationState* c
 __global__
 void add(int num_states, SystemState *states)
 {
-    states[threadIdx.x].next();
-    states[threadIdx.x].next();
-    states[threadIdx.x].next();
-    states[threadIdx.x].next();
-    states[threadIdx.x].next();
+    for (int i = 0; i < 0x50; i++) {
+        states[threadIdx.x].next();
+    }
 }
 
 #include "utilities.h"
@@ -83,11 +81,20 @@ int main(void)
     /* */
 
     for (int i = 0; i < states[7].traceIndex; i++) {
-        std::cout << "R " << logLineFormat(log_lines[i]) << "\n";
-        std::cout << "A " << traceLineFormat(states[7].traceLineData[i]) << "\n";
-        std::cout << "> " << lineCompare(logLineFormat(log_lines[i]), traceLineFormat(states[7].traceLineData[i])) << "\n";
-        std::cout <<"\n";
+        std::string reference = logLineFormat(log_lines[i]);
+        std::string actual = traceLineFormat(states[7].traceLineData[i]);
+
+        if (reference == actual) {
+            std::cout << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << i << " ";
+            std::cout << "│ " << actual << "\n";
+        } else {
+            std::cout << "\n" << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << i << "";
+            std::cout << " · " << reference << "\n";
+            std::cout << "     " << lineCompare(reference, actual) << "\n";
+        }
     }
+
+    std::cout << std::endl;
 
     /* */
 

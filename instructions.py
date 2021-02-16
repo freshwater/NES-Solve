@@ -788,21 +788,30 @@ if __name__ == '__main__':
     format_types = {
         immediate: "Immediate",
         absolute_address: "Absolute",
-        zeropage_address: "Zeropage"
+        zeropage_address: "Zeropage",
+        zeropage_dereference: "ZeropageDereference",
+        implied: "Implied",
+        relative_address: "Address_Relative"
     }
 
     for opcode in range(256):
-        if opcode in [0x4C, 0xA2, 0x86]:
+        if opcode in [0x4C, 0xA2, 0x86, 0x20, 0xEA, 0x38, 0xB0, 0x18, 0x90, 0xA9, 0xF0,
+                      0xD0, 0x85, 0x24, 0x70, 0x50, 0x10, 0x60, 0x78, 0xF8]:
             operation, byte_count, addressing, wire = instructions[opcode]
             region = operation()
             wire = wire or addressing()
 
             pc_increment = byte_count
-            if opcode in [0x4C]:
+            if opcode in [0x4C, 0x20, 0x60]:
+                # instructions that directly modify the program counter
                 pc_increment = 0
 
-            operations.append(f'/*0x{opcode:02X}*//*{operation.__name__}*/{region.struct(wire_region=wire, byte_count=pc_increment)}')
-            operation_info.append(f'/*0x{opcode:02X}*//*{operation.__name__}*/OperationInformation{{.name="{operation.__name__}", .byte_count={byte_count}, .format_type="{format_types[addressing]}"}}')
+            name = operation.__name__
+            if opcode == 0x24:
+                name = "BIT"
+
+            operations.append(f'/*0x{opcode:02X}*//*{name}*/{region.struct(wire_region=wire, byte_count=pc_increment)}')
+            operation_info.append(f'/*0x{opcode:02X}*//*{name}*/OperationInformation{{.name="{name}", .byte_count={byte_count}, .format_type="{format_types[addressing]}"}}')
 
         else:
             operations.append(f'/*0x{opcode:02X}*//*NOP*/RegionComposition{{}}')

@@ -4,32 +4,43 @@ std::string traceLineFormat(Trace trace)
     uint8_t opcode = unsigned((uint8_t)trace.opcode);
     OperationInformation info = operation_info[opcode];
 
-    char str[4][100];
-
-    sprintf(str[0], "%04X %02X %02X",
-            trace.ProgramCounter,
-            unsigned((uint8_t)trace.opcode),
-            unsigned((uint8_t)trace.byte1));
-
-    if (info.byte_count == 2) {
-        strcpy(str[1], "");
-    } else if (info.byte_count == 3) {
-        sprintf(str[1], " %02X",
-            unsigned((uint8_t)trace.byte2));
-    } else {
-        strcpy(str[1], " --");
+    char str[6][100];
+    for (char* s: str) {
+        strcpy(s, "");
     }
 
-    sprintf(str[2], " %s %s", info.name.data(),
-            info.doFormat(trace.byte1, trace.byte2).data());
+    sprintf(str[0], "%04X %02X",
+            trace.program_counter,
+            unsigned((uint8_t)trace.opcode));
 
-    sprintf(str[3], " A:%02X X:%02X Y:%02X",
+    if (info.byte_count > 1) {
+        sprintf(str[1], " %02X",
+            unsigned((uint8_t)trace.byte1));
+    }
+
+    if (info.byte_count > 2) {
+        sprintf(str[2], " %02X",
+            unsigned((uint8_t)trace.byte2));
+    }
+
+    if (info.byte_count < 1 | info.byte_count > 3) {
+        strcpy(str[2], " --");
+    }
+
+    sprintf(str[3], " %s %s", info.name.data(),
+            info.doFormat(trace.byte1, trace.byte2, trace.program_counter).data());
+
+    sprintf(str[4], "A:%02X X:%02X Y:%02X",
             unsigned((uint8_t)trace.A),
             unsigned((uint8_t)trace.X),
             unsigned((uint8_t)trace.Y));
 
+    sprintf(str[5], " P:%02X SP:%02X",
+            unsigned((uint8_t)trace.status_register),
+            unsigned((uint8_t)trace.stack_offset));
+
     using namespace std;
-    return string(str[0]) + string(str[1]) + string(str[2]) + string(str[3]);
+    return string(str[0]) + string(str[1]) + string(str[2]) + string(str[3]) + string(str[4]) + string(str[5]);
 }
 
 std::string logLineFormat(std::vector<std::string> line)

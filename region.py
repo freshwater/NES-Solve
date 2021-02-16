@@ -88,6 +88,25 @@ class Region_Flags:
         state.Z = state.Z*self.Z_keep + self.Z_adjust + (Z_value == 0)*(self.Z_adjust_source != 0)
         state.C = state.C*self.C_keep + self.C_adjust + (C_direct_value)*(self.C_adjust_direct != 0)
 
+    def __str__(self):
+        return ' '.join(f'''Region_Flags{{.N_keep={self.N_keep},
+                                          .N_adjust={self.N_adjust},
+                                          .N_adjust_source={self.N_adjust_source},
+                                          .O_keep={self.O_keep},
+                                          .O_adjust={self.O_adjust},
+                                          .O_adjust_direct={self.O_adjust_source},
+                                          .D_keep={self.D_keep},
+                                          .D_adjust={self.D_adjust},
+                                          .I_keep={self.I_keep},
+                                          .I_adjust={self.I_adjust},
+                                          .Z_keep={self.Z_keep},
+                                          .Z_adjust={self.Z_adjust},
+                                          .Z_adjust_source={self.Z_adjust_source},
+                                          .C_keep={self.C_keep},
+                                          .C_adjust={self.C_adjust},
+                                          .C_adjust_direct={self.C_adjust_direct}
+                                          }}'''.split())
+
 class Region_FlagsByte:
     def __init__(self, set_from_value1=0):
         self.set_from_value1 = set_from_value1
@@ -113,6 +132,12 @@ class Region_BooleanLogic:
         computation_state.value1 = computation_state.value1*(1-self.value1_wire) + result*self.value1_wire
         computation_state.value2 = computation_state.value2*(1-self.value2_wire) + result*self.value2_wire
         computation_state.value3 = computation_state.value3*(1-self.value3_wire) + result*self.value3_wire
+
+    def __str__(self):
+        return ' '.join(f'''Region_BooleanLogic{{.A_AND_value1={self.AND_A},
+                                                 .value3_output={self.value3_wire},
+                                                 }}'''.split())
+
 
 class Region_Arithmetic:
     def __init__(self, value1_increment=0):
@@ -187,6 +212,9 @@ class Region_JSR_RTS_RTI:
 
         state.program_counter = (state.program_counter)*(1-any_) + (new_program_counter)*any_
 
+    def __str__(self):
+        return ' '.join(f'''Region_JSR_RTS_RTI{{.jsr_OK={self.jsr_OK}, .rts_OK={self.rts_OK}}}'''.split())
+
 class Region_BitShift:
     def __init__(self, right_shift=0, right_rotate=0,
                  left_shift=0, left_rotate=0,
@@ -234,6 +262,14 @@ class Region_Branch:
                      (state.C == self.flag_match)*self.C_flag_branch)
 
         state.program_counter = state.program_counter + np.int8((computation_state.value1)*condition)
+
+    def __str__(self):
+        return ' '.join(f'''Region_Branch{{.flag_match={self.flag_match},
+                                           .N_flag_branch={self.N_flag_branch},
+                                           .O_flag_branch={self.O_flag_branch},
+                                           .Z_flag_branch={self.Z_flag_branch},
+                                           .C_flag_branch={self.C_flag_branch}
+                                           }}'''.split())
 
 class Region_StackOffset:
     def __init__(self, offset_keep=1, offset_adjust=0):
@@ -412,9 +448,13 @@ class Region_Wire:
                                      (Region_Wire.absolute_x_address(state, computation_state, self.address_from_absolute_x))*self.address_from_absolute_x)
 
     def __str__(self):
+        # return Region_Wire(value1_from_zeropage_dereference=1, address_from_zeropage=1)
         return ' '.join(f'''Region_Wire{{.value1_from_data1={self.value1_from_zeropage},
+                                         .value1_from_zeropage_dereference={self.value1_from_zeropage_dereference},
                                          .value1_from_X={self.value1_from_X},
-                                         .address_from_absolute={self.address_from_absolute}}}'''.split())
+                                         .address_from_absolute={self.address_from_absolute},
+                                         .address_from_zeropage={self.address_from_zeropage}
+                                         }}'''.split())
 
 class Region_Rewire:
     def __init__(self, value1_keep=1, value1_from_A=0, value1_from_X=0, value1_from_Y=0,
@@ -486,8 +526,12 @@ class Region_Rewire:
         state.stack_offset = new_stack_offset
 
     def __str__(self):
-        return ' '.join(f'''Region_Rewire{{.X_from_value1={self.X_from_value1},
-                                  .program_counter_from_address={self.program_counter_from_address}}}'''.split())
+        return ' '.join(f'''Region_Rewire{{.A_from_value1={self.A_from_value1},
+                                           .X_from_value1={self.X_from_value1},
+                                           .value1_from_A={self.value1_from_A},
+                                           .value2_from_value1_bit6={self.value2_from_bit6},
+                                           .program_counter_from_address={self.program_counter_from_address}
+                                           }}'''.split())
 
 class Region_Write:
     def __init__(self, address_write=0):
@@ -570,7 +614,11 @@ class RegionComposition:
     def struct(self, wire_region, byte_count):
         regions = [
             ("wire", wire_region),
+            ("boolean_logic", self.regions[3]),
+            ("jsr_rts_rti", self.regions[6]),
             ("rewire", self.regions[8]),
+            ("branch", self.regions[9]),
+            ("flags", self.regions[12]),
             ("write", self.regions[14]),
             ("program_counter", Region_ProgramCounter(PC_increment=byte_count))
         ]

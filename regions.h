@@ -82,11 +82,12 @@ struct Region_JSR_RTS_RTI {
 };
 
 struct Region_Rewire {
+    flag_t value1_from_A = 0;
+    flag_t value2_from_value1_bit6 = 0;
+
     flag_t A_from_value1 = 0;
     flag_t X_from_value1 = 0;
 
-    flag_t value1_from_A = 0;
-    flag_t value2_from_value1_bit6 = 0;
     flag_t program_counter_from_address = 0;
 
     __device__
@@ -164,11 +165,11 @@ struct Region_Flags {
 };
 
 struct Region_Write {
-    flag_t address_write = 0;
+    flag_t address_write_OK = 0;
 
     __device__
     void transition(SystemState* state, ComputationState* computation_state) const {
-        int16u_t address = (NULL_ADDRESS_WRITE)*(1-address_write) + (computation_state->address)*address_write;
+        int16u_t address = (NULL_ADDRESS_WRITE)*(1-address_write_OK) + (computation_state->address)*address_write_OK;
         state->memory[address] = computation_state->value1;
     }
 };

@@ -40,8 +40,11 @@ struct SystemState {
     int8u_t C = 0;
 
     ComputationState computation_state;
-    Trace traceLineData[200];
+
+    #ifdef DEBUG
+    Trace traceLineData[0x300];
     int traceIndex = 0;
+    #endif
 
     SystemState(std::vector<char>& program, int program_counter, int load_point) {
         std::copy(program.begin(), program.end(), &memory[load_point]);
@@ -57,6 +60,7 @@ struct SystemState {
 
     __device__
     void traceWrite(uint16_t program_counter, int8u_t* opcodes) {
+        #ifdef DEBUG
         traceLineData[traceIndex] = {
             .program_counter = program_counter,
             .opcode = opcodes[0],
@@ -70,6 +74,7 @@ struct SystemState {
         };
 
         traceIndex++;
+        #endif
     }
 
     __device__

@@ -5,6 +5,8 @@
 #include <vector>
 #include <math.h>
 
+#define DEBUG NULL
+
 #define NULL_ADDRESS_MARGIN 4
 #define NULL_ADDRESS_READ (0x10000 + 0)
 #define NULL_ADDRESS_WRITE (0x10000 + 2)
@@ -12,6 +14,7 @@
 
 typedef const uint32_t flag_t;
 typedef const uint32_t int_t;
+typedef const int32_t int_signed_t;
 typedef uint32_t int16u_t;
 typedef uint32_t int8u_t;
 
@@ -35,7 +38,7 @@ void operationTransition(uint8_t opcode, SystemState* state, ComputationState* c
 __global__
 void add(int num_states, SystemState *states)
 {
-    for (int i = 0; i < 0x50; i++) {
+    for (int i = 0; i < 0x2B0; i++) {
         states[threadIdx.x].next();
     }
 }
@@ -67,6 +70,8 @@ int main(void)
 
     /* */
 
+    #ifdef DEBUG
+
     std::cout << "\n";
     for (int i = 0; i < num_states; i++) {
         if (i == 7 || i == 8) {
@@ -80,6 +85,7 @@ int main(void)
 
     /* */
 
+    int mismatch_count = 0;
     for (int i = 0; i < states[7].traceIndex; i++) {
         std::string reference = logLineFormat(log_lines[i]);
         std::string actual = traceLineFormat(states[7].traceLineData[i]);
@@ -90,11 +96,15 @@ int main(void)
         } else {
             std::cout << "\n" << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << i << "";
             std::cout << " · " << reference << "\n";
-            std::cout << "     " << lineCompare(reference, actual) << "\n";
+            std::cout << "      " << lineCompare(reference, actual) << "\n";
+
+            mismatch_count++;
         }
     }
 
-    std::cout << std::endl;
+    std::cout << "\n" << mismatch_count << "\n" << std::endl;
+
+    #endif
 
     /* */
 

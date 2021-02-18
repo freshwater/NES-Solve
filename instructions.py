@@ -221,7 +221,7 @@ def INC() -> [(0xE6, zeropage_dereference), (0xEE, absolute), (0xF6, zeropage_x)
         arithmetic=Region_Arithmetic(value1_increment=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1),
-        write=Region_Write(address_write_OK=1))
+        write=Region_Write(memory_write_value1=1))
 
 def INX() -> [(0xE8, implied, Region_Wire(value1_from_X=1))]:
     # state.X = byte(state.X + 1); Z_set(state, state.X); N_set(state, state.X)
@@ -240,7 +240,7 @@ def DEC_zpg() -> [(0xC6, zeropage_dereference), (0xCE, absolute), (0xD6, zeropag
         arithmetic=Region_Arithmetic(value1_increment=-1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1),
-        write=Region_Write(address_write_OK=1))
+        write=Region_Write(memory_write_value1=1))
 
 def BIT() -> [(0x2C, absolute_dereference), (0x24, zeropage_dereference)]:
     # result = byte(state.A & a)
@@ -248,7 +248,7 @@ def BIT() -> [(0x2C, absolute_dereference), (0x24, zeropage_dereference)]:
     # N_set(state, a)
     # state.status_register['Overflow'] = (a >> 6) & 0x01
     return RegionComposition(
-        boolean_logic=Region_BooleanLogic(A_AND_value1=1, value3_output=1),
+        boolean_logic=Region_BooleanLogic(A_AND_value1=1, value3_out=1),
         rewire=Region_Rewire(value2_from_value1_bit6=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            O_keep=0, O_adjust=0, O_adjust_direct=Wire.VALUE2,
@@ -264,7 +264,7 @@ def CMP() -> [(0xC1, indirect_x_dereference), (0xC5, zeropage_dereference), (0xC
     # else:
     #     state.status_register['Carry'] = 0
     return RegionComposition(
-        compare=Region_Compare(A_compare=1, value1_out=1, value3_from_carry=1),
+        compare=Region_Compare(A_compare_with_value1=1, value1_out=1, value3_from_carry=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1,
                            C_keep=0, C_adjust=0, C_adjust_direct=Wire.VALUE3))
@@ -277,7 +277,7 @@ def CPX() -> [(0xE0, immediate), (0xE4, zeropage_dereference), (0xEC, absolute_d
     # else:
     #     state.status_register['Carry'] = 0
     return RegionComposition(
-        compare=Region_Compare(X_compare=1, value1_out=1, value3_from_carry=1),
+        compare=Region_Compare(X_compare_with_value1=1, value1_out=1, value3_from_carry=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1,
                            C_keep=0, C_adjust=0, C_adjust_direct=Wire.VALUE3))
@@ -290,7 +290,7 @@ def CPY() -> [(0xC0, immediate), (0xC4, zeropage_dereference), (0xCC, absolute_d
     # else:
     #     state.status_register['Carry'] = 0
     return RegionComposition(
-        compare=Region_Compare(Y_compare=1, value1_out=1, value3_from_carry=1),
+        compare=Region_Compare(Y_compare_with_value1=1, value1_out=1, value3_from_carry=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1,
                            C_keep=0, C_adjust=0, C_adjust_direct=Wire.VALUE3))
@@ -300,7 +300,7 @@ def ORA() -> [(0x01, indirect_x_dereference), (0x05, zeropage_dereference), (0x0
                       (0x19, absolute_y_dereference), (0x1D, absolute_x_dereference)]:
     # state.A |= a; Z_set(state, state.A); N_set(state, state.A)
     return RegionComposition(
-        boolean_logic=Region_BooleanLogic(OR_A=1, value1_wire=1),
+        boolean_logic=Region_BooleanLogic(A_OR_value1=1, value1_out=1),
         rewire=Region_Rewire(A_from_value1=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1))
@@ -310,7 +310,7 @@ def EOR() -> [(0x41, indirect_x_dereference), (0x45, zeropage_dereference), (0x4
                       (0x59, absolute_y_dereference), (0x5D, absolute_x_dereference)]:
     # state.A ^= a; Z_set(state, state.A); N_set(state, state.A)
     return RegionComposition(
-        boolean_logic=Region_BooleanLogic(XOR_A=1, value1_wire=1),
+        boolean_logic=Region_BooleanLogic(A_XOR_value1=1, value1_out=1),
         rewire=Region_Rewire(A_from_value1=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1))
@@ -320,7 +320,7 @@ def AND() -> [(0x21, indirect_x_dereference), (0x25, zeropage_dereference), (0x2
                       (0x39, absolute_y_dereference), (0x3D, absolute_x_dereference)]:
     # state.A &= a; Z_set(state, state.A); N_set(state, state.A)
     return RegionComposition(
-        boolean_logic=Region_BooleanLogic(A_AND_value1=1, value1_wire=1),
+        boolean_logic=Region_BooleanLogic(A_AND_value1=1, value1_out=1),
         rewire=Region_Rewire(A_from_value1=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1))
@@ -351,7 +351,7 @@ def ASL_zpg() -> [(0x06, zeropage_dereference), (0x0E, absolute), (0x16, zeropag
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1,
                            C_keep=0, C_adjust=0, C_adjust_direct=Wire.VALUE3),
-        write=Region_Write(address_write_OK=1))
+        write=Region_Write(memory_write_value1=1))
 
 def LSR() -> [(0x4A, implied, Region_Wire(value1_from_A=1))]:
     # result = state.A >> 1
@@ -381,7 +381,7 @@ def LSR_zpg() -> [(0x46, zeropage_dereference),#, Region_Wire(value1_from_zeropa
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1,
                            C_keep=0, C_adjust=0, C_adjust_direct=Wire.VALUE3),
-        write=Region_Write(address_write_OK=1))
+        write=Region_Write(memory_write_value1=1))
 
 def ROL() -> [(0x2A, implied, Region_Wire(value1_from_A=1))]:
     # result = (state.A << 1) | state.status_register['Carry']
@@ -411,7 +411,7 @@ def ROL_zpg() -> [(0x26, zeropage_dereference), (0x2E, absolute), (0x36, zeropag
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1,
                            C_keep=0, C_adjust=0, C_adjust_direct=Wire.VALUE3),
-        write=Region_Write(address_write_OK=1))
+        write=Region_Write(memory_write_value1=1))
 
 def ROR() -> [(0x6A, implied, Region_Wire(value1_from_A=1))]:
     # result = state.status_register['Carry'] << 7
@@ -442,7 +442,7 @@ def ROR_zpg() -> [(0x66, zeropage_dereference), (0x6E, absolute), (0x76, zeropag
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1,
                            C_keep=0, C_adjust=0, C_adjust_direct=Wire.VALUE3),
-        write=Region_Write(address_write_OK=1))
+        write=Region_Write(memory_write_value1=1))
 
 def ADC() -> [(0x61, indirect_x_dereference), (0x65, zeropage_dereference), (0x69, immediate),
                       (0x6D, absolute_dereference), (0x71, indirect_y_dereference), (0x75, zeropage_x_dereference),
@@ -487,19 +487,19 @@ def STA() -> [(0x81, indirect_x_address), (0x8D, absolute_address), (0x85, zerop
     # state.memory[a] = state.A
     return RegionComposition(
         rewire=Region_Rewire(value1_from_A=1),
-        write=Region_Write(address_write_OK=1))
+        write=Region_Write(memory_write_value1=1))
 
 def STX() -> [(0x86, zeropage_address), (0x8E, absolute_address), (0x96, zeropage_y_address)]:
     # state.memory[a] = state.X
     return RegionComposition(
         rewire=Region_Rewire(value1_from_X=1),
-        write=Region_Write(address_write_OK=1))
+        write=Region_Write(memory_write_value1=1))
 
 def STY() -> [(0x84, zeropage_address), (0x8C, absolute_address), (0x94, zeropage_x_address)]:
     # state.memory[a] = state.Y
     return RegionComposition(
         rewire=Region_Rewire(value1_from_Y=1),
-        write=Region_Write(address_write_OK=1))
+        write=Region_Write(memory_write_value1=1))
 
 def TXA() -> [(0x8A, implied)]:
     # state.A = state.X; Z_set(state, state.A); N_set(state, state.A)
@@ -648,13 +648,11 @@ def RTS() -> [(0x60, implied)]:
     return RegionComposition(
         jsr_rts_rti=Region_JSR_RTS_RTI(rts_OK=1))
 
-def PHA() -> [(0x48, implied)]:
+def PHA() -> [(0x48, implied, Region_Wire(value1_from_A=1))]:
     # state.memory[STACK_ZERO + state.stack_offset] = state.A
     # state.stack_offset -= 1
     return RegionComposition(
-        rewire=Region_Rewire(value1_from_A=1),
-        stack_write=Region_StackWrite(write_from_value1=1),
-        stack_offset2=Region_StackOffset(offset_keep=1, offset_adjust=-1))
+        stack_write=Region_StackWrite(stack_write_value1=1, stack_offset_post_adjust=-1))
 
 def PHP() -> [(0x08, implied)]:
     # status_register = state.status_register_byte()
@@ -662,10 +660,8 @@ def PHP() -> [(0x08, implied)]:
     # state.memory[STACK_ZERO + state.stack_offset] = status_register
     # state.stack_offset -= 1
     return RegionComposition(
-        rewire=Region_Rewire(value1_from_P_push_bits=1),
-        stack_write=Region_StackWrite(write_from_value1=1),
-        stack_offset2=Region_StackOffset(offset_keep=1, offset_adjust=-1)
-    )
+        rewire=Region_Rewire(value1_from_status_push_bits=1),
+        stack_write=Region_StackWrite(stack_write_value1=1, stack_offset_post_adjust=-1))
 
 def PLA() -> [(0x68, implied)]:
     # state.stack_offset += 1
@@ -673,8 +669,7 @@ def PLA() -> [(0x68, implied)]:
     # Z_set(state, state.A)
     # N_set(state, state.A)
     return RegionComposition(
-        stack_offset1=Region_StackOffset(offset_keep=1, offset_adjust=1),
-        stack_read=Region_StackRead(value1_from_read=1),
+        stack_read=Region_StackRead(value1_from_stack_read=1, stack_offset_pre_adjust=1),
         rewire=Region_Rewire(A_from_value1=1),
         flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1))
@@ -685,9 +680,8 @@ def PLP() -> [(0x28, implied)]:
     # data = Behaviors.read_special_status_bits_on_pull(state, data)
     # state.status_register_byte_set(data)
     return RegionComposition(
-        stack_offset1=Region_StackOffset(offset_keep=1, offset_adjust=1),
-        stack_read=Region_StackRead(value1_from_read=1, read_special_status_bits=1),
-        flags_byte=Region_FlagsByte(set_from_value1=1))
+        stack_read=Region_StackRead(value1_from_stack_read=1, read_special_status_bits=1, stack_offset_pre_adjust=1),
+        flags=Region_Flags(set_byte_from_value1=1))
 
 #-
 
@@ -785,7 +779,9 @@ if __name__ == '__main__':
 
     for opcode in range(256):
         if opcode in [0x4C, 0xA2, 0x86, 0x20, 0xEA, 0x38, 0xB0, 0x18, 0x90, 0xA9, 0xF0,
-                      0xD0, 0x85, 0x24, 0x70, 0x50, 0x10, 0x60, 0x78, 0xF8]:
+                      0xD0, 0x85, 0x24, 0x70, 0x50, 0x10, 0x60, 0x78, 0xF8, 0x08, 0x68,
+                      0x29, 0xC9, 0xD8, 0x48, 0x28, 0x30, 0x09, 0xB8, 0x49, 0x69, 0xA0,
+                      0xC0, 0xE0, 0xE9, 0xC8, 0xE8, 0x88, 0xCA]:
             operation, byte_count, addressing, wire = instructions[opcode]
             region = operation()
             wire = wire or addressing()

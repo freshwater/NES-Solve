@@ -51,9 +51,11 @@ class Region:
         return result
 
 class Region_Wire(Region):
-    def __init__(self, value1_from_A=0, value1_from_Y=0,
+    def __init__(self, 
                  value1_from_address=0, value1_from_data1=0,
-                 value1_from_zeropage_dereference=0, value1_from_X=0, value1_from_absolute_dereference=0,
+                 value1_from_zeropage_dereference=0,
+                 value1_from_A=0, value1_from_X=0, value1_from_Y=0,
+                 value1_from_absolute_dereference=0,
                  value1_from_indirect_x_dereference=0, value1_from_indirect_y_dereference=0,
                  value1_from_zeropage_x=0, value1_from_absolute_y_dereference=0,
                  value1_from_zeropage_y=0, address_from_absolute=0, address_from_zeropage=0,
@@ -200,63 +202,104 @@ class Region_Wire(Region):
                                      (Region_Wire.absolute_x_address(state, computation_state, self.address_from_absolute_x))*self.address_from_absolute_x)
 
     def args_OK(self):
-        return ['value1_from_data1', 'value1_from_zeropage_dereference', 'value1_from_X',
+        return ['value1_from_data1', 'value1_from_zeropage_dereference',
+                'value1_from_A', 'value1_from_X', 'value1_from_Y',
                 'address_from_absolute', 'address_from_zeropage']
 
-class Region_Compare:
-    def __init__(self, A_compare=0, X_compare=0, Y_compare=0, value1_out=0, value3_from_carry=0):
-        self.A_compare = A_compare
-        self.X_compare = X_compare
-        self.Y_compare = Y_compare
+class Region_Compare(Region):
+    def __init__(self, A_compare_with_value1=0, X_compare_with_value1=0, Y_compare_with_value1=0,
+                 value1_out=0, value3_from_carry=0):
+        self.A_compare_with_value1 = A_compare_with_value1
+        self.X_compare_with_value1 = X_compare_with_value1
+        self.Y_compare_with_value1 = Y_compare_with_value1
 
         self.value1_out = value1_out
         self.value3_from_carry = value3_from_carry
 
     def transition(self, state, computation_state):
-        result = state.A*self.A_compare + state.X*self.X_compare + state.Y*self.Y_compare - computation_state.value1
-        carry = computation_state.value1 <= (state.A*self.A_compare + state.X*self.X_compare + state.Y*self.Y_compare)
+        result = state.A*self.A_compare_with_value1 + state.X*self.X_compare_with_value1 + state.Y*self.Y_compare_with_value1 - computation_state.value1
+        carry = computation_state.value1 <= (state.A*self.A_compare_with_value1 + state.X*self.X_compare_with_value1 + state.Y*self.Y_compare_with_value1)
 
         computation_state.value1 = computation_state.value1*(1-self.value1_out) + result*self.value1_out
         computation_state.value3 = computation_state.value3*(1-self.value3_from_carry) + carry*self.value3_from_carry
 
-class Region_StackRead:
-    def __init__(self, value1_from_read=0, read_special_status_bits=0):
-        self.value1_from_read = value1_from_read
-        self.read_special_status_bits = read_special_status_bits
-
-    def transition(self, state, computation_state):
-        computation_state.value1 = computation_state.value1*(1-self.value1_from_read) + (state.memory[STACK_ZERO + state.stack_offset])*self.value1_from_read
-        special_status_bits = behaviors.Behaviors.read_special_status_bits_on_pull(state, computation_state.value1, is_PLP_or_RTI=self.read_special_status_bits)
-        computation_state.value1 = computation_state.value1*(1-self.read_special_status_bits) + (special_status_bits)*self.read_special_status_bits
+    def args_OK(self):
+        return ['A_compare_with_value1', 'X_compare_with_value1', 'Y_compare_with_value1', 'value1_out', 'value3_from_carry']
 
 class Region_BooleanLogic(Region):
-    def __init__(self, OR_A=0, XOR_A=0, A_AND_value1=0,
-                 A_wire=0, value1_wire=0, value2_wire=0, value3_output=0):
+    def __init__(self, A_AND_value1=0, A_OR_value1=0, A_XOR_value1=0,
+                 A_wire=0, value1_out=0, value2_wire=0, value3_out=0):
         self.A_wire = A_wire
-        self.OR_A, self.XOR_A, self.A_AND_value1 = OR_A, XOR_A, A_AND_value1
-        self.value1_wire, self.value2_wire, self.value3_output = value1_wire, value2_wire, value3_output
+        self.A_OR_value1, self.A_XOR_value1, self.A_AND_value1 = A_OR_value1, A_XOR_value1, A_AND_value1
+        self.value1_out, self.value2_wire, self.value3_out = value1_out, value2_wire, value3_out
 
     def transition(self, state, computation_state):
-        result = byte((computation_state.value1 | state.A)*self.OR_A +
-                      (computation_state.value1 ^ state.A)*self.XOR_A +
+        result = byte((computation_state.value1 | state.A)*self.A_OR_value1 +
+                      (computation_state.value1 ^ state.A)*self.A_XOR_value1 +
                       (computation_state.value1 & state.A)*self.A_AND_value1)
 
         state.A = state.A*(1-self.A_wire) + result*self.A_wire
-        computation_state.value1 = computation_state.value1*(1-self.value1_wire) + result*self.value1_wire
+        computation_state.value1 = computation_state.value1*(1-self.value1_out) + result*self.value1_out
         computation_state.value2 = computation_state.value2*(1-self.value2_wire) + result*self.value2_wire
-        computation_state.value3 = computation_state.value3*(1-self.value3_output) + result*self.value3_output
+        computation_state.value3 = computation_state.value3*(1-self.value3_out) + result*self.value3_out
 
     def args_OK(self):
-        return ['A_AND_value1', 'value3_output']
+        return ['A_AND_value1', 'A_OR_value1', 'A_XOR_value1', 'value1_out', 'value3_out']
 
-class Region_Arithmetic:
+class Region_BitShift:
+    def __init__(self, right_shift=0, right_rotate=0,
+                 left_shift=0, left_rotate=0,
+                 value1_out=0, value3_from_carry=0):
+        self.right_shift = right_shift
+        self.right_rotate = right_rotate
+        self.left_shift = left_shift
+        self.left_rotate = left_rotate
+
+        self.value1_out = value1_out
+        self.value3_from_carry = value3_from_carry
+
+    def transition(self, state, computation_state):
+        any_ = self.right_shift + self.right_rotate + self.left_shift + self.left_rotate
+        any_right = self.right_shift + self.right_rotate
+        any_left = self.left_shift + self.left_rotate
+        any_rotate = self.left_rotate + self.right_rotate
+
+        new_ = byte(computation_state.value1*(1-any_) + ((computation_state.value1 >> 1)*any_right +
+                                                         (computation_state.value1 << 1)*any_left))
+
+        new_carry = (computation_state.value1 & 0x01)*any_right + (computation_state.value1 >> 7)*any_left
+        new_ = new_*(1-any_rotate) + (((state.C << 7) | new_)*self.right_rotate +
+                                      ((state.C << 0) | new_)*self.left_rotate)
+
+        computation_state.value1 = (computation_state.value1)*(1-self.value1_out) + (new_)*self.value1_out
+        computation_state.value3 = (computation_state.value3)*(1-self.value3_from_carry) + (new_carry)*self.value3_from_carry
+
+class Region_Arithmetic(Region):
     def __init__(self, value1_increment=0):
         self.value1_increment = value1_increment
 
     def transition(self, state, computation_state):
         computation_state.value1 = byte((computation_state.value1) + self.value1_increment)
 
-class Region_ADC_SBC:
+    def args_OK(self):
+        return ['value1_increment']
+
+class Region_StackRead(Region):
+    def __init__(self, value1_from_stack_read=0, read_special_status_bits=0, stack_offset_pre_adjust=0):
+        self.value1_from_stack_read = value1_from_stack_read
+        self.read_special_status_bits = read_special_status_bits
+        self.stack_offset_pre_adjust = stack_offset_pre_adjust
+
+    def transition(self, state, computation_state):
+        state.stack_offset += self.stack_offset_pre_adjust
+        computation_state.value1 = computation_state.value1*(1-self.value1_from_stack_read) + (state.memory[STACK_ZERO + state.stack_offset])*self.value1_from_stack_read
+        special_status_bits = behaviors.Behaviors.read_special_status_bits_on_pull(state, computation_state.value1, is_PLP_or_RTI=self.read_special_status_bits)
+        computation_state.value1 = computation_state.value1*(1-self.read_special_status_bits) + (special_status_bits)*self.read_special_status_bits
+
+    def args_OK(self):
+        return ['value1_from_stack_read', 'read_special_status_bits', 'stack_offset_pre_adjust']
+
+class Region_ADC_SBC(Region):
     def __init__(self, value1_from_ADC=0, value1_from_SBC=0, value2_from_overflow=0, value3_from_carry=0):
         self.value1_from_ADC = value1_from_ADC
         self.value1_from_SBC = value1_from_SBC
@@ -276,6 +319,9 @@ class Region_ADC_SBC:
         computation_state.value1 = (computation_state.value1)*(1-any_) + (result)*any_
         computation_state.value2 = (computation_state.value2)*(1-self.value2_from_overflow) + (overflow)*self.value2_from_overflow
         computation_state.value3 = (computation_state.value3)*(1-self.value3_from_carry) + (new_carry)*self.value3_from_carry
+
+    def args_OK(self):
+        return ['value1_from_ADC', 'value1_from_SBC', 'value2_from_overflow', 'value3_from_carry']
 
 class Region_JSR_RTS_RTI(Region):
     def __init__(self, jsr_OK=0, rts_OK=0, rti_OK=0):
@@ -325,37 +371,32 @@ class Region_JSR_RTS_RTI(Region):
     def args_OK(self):
         return ['jsr_OK', 'rts_OK']
 
-class Region_BitShift:
-    def __init__(self, right_shift=0, right_rotate=0,
-                 left_shift=0, left_rotate=0,
-                 value1_out=0, value3_from_carry=0):
-        self.right_shift = right_shift
-        self.right_rotate = right_rotate
-        self.left_shift = left_shift
-        self.left_rotate = left_rotate
-
-        self.value1_out = value1_out
-        self.value3_from_carry = value3_from_carry
+class Region_Branch(Region):
+    def __init__(self, flag_match=0,
+                 N_flag_branch=0,
+                 O_flag_branch=0,
+                 Z_flag_branch=0,
+                 C_flag_branch=0):
+        self.flag_match = flag_match
+        self.N_flag_branch = N_flag_branch
+        self.O_flag_branch = O_flag_branch
+        self.Z_flag_branch = Z_flag_branch
+        self.C_flag_branch = C_flag_branch
 
     def transition(self, state, computation_state):
-        any_ = self.right_shift + self.right_rotate + self.left_shift + self.left_rotate
-        any_right = self.right_shift + self.right_rotate
-        any_left = self.left_shift + self.left_rotate
-        any_rotate = self.left_rotate + self.right_rotate
+        condition = ((state.N == self.flag_match)*self.N_flag_branch +
+                     (state.O == self.flag_match)*self.O_flag_branch +
+                     (state.Z == self.flag_match)*self.Z_flag_branch +
+                     (state.C == self.flag_match)*self.C_flag_branch)
 
-        new_ = byte(computation_state.value1*(1-any_) + ((computation_state.value1 >> 1)*any_right +
-                                                         (computation_state.value1 << 1)*any_left))
+        state.program_counter = state.program_counter + np.int8((computation_state.value1)*condition)
 
-        new_carry = (computation_state.value1 & 0x01)*any_right + (computation_state.value1 >> 7)*any_left
-        new_ = new_*(1-any_rotate) + (((state.C << 7) | new_)*self.right_rotate +
-                                      ((state.C << 0) | new_)*self.left_rotate)
-
-        computation_state.value1 = (computation_state.value1)*(1-self.value1_out) + (new_)*self.value1_out
-        computation_state.value3 = (computation_state.value3)*(1-self.value3_from_carry) + (new_carry)*self.value3_from_carry
+    def args_OK(self):
+        return ['flag_match', 'N_flag_branch', 'O_flag_branch', 'Z_flag_branch', 'C_flag_branch']
 
 class Region_Rewire(Region):
     def __init__(self, value1_keep=1, value1_from_A=0, value1_from_X=0, value1_from_Y=0,
-                       value1_from_P_push_bits=0, value1_from_stack_offset=0,
+                       value1_from_status_push_bits=0, value1_from_stack_offset=0,
                        value2_keep=1, value2_from_value1_bit6=0,
                        A_from_value1=0, A_from_X=0, A_from_Y=0,
                        X_from_value1=0, X_from_A=0, X_from_stack_offset=0,
@@ -366,7 +407,7 @@ class Region_Rewire(Region):
         self.value1_from_A = value1_from_A
         self.value1_from_X = value1_from_X
         self.value1_from_Y = value1_from_Y
-        self.value1_from_P_push_bits = value1_from_P_push_bits
+        self.value1_from_status_push_bits = value1_from_status_push_bits
         self.value1_from_stack_offset = value1_from_stack_offset
 
         self.value2_keep = value2_keep
@@ -392,7 +433,7 @@ class Region_Rewire(Region):
         new_value1 = computation_state.value1*self.value1_keep + ((state.A)*self.value1_from_A +
                                                                   (state.X)*self.value1_from_X +
                                                                   (state.Y)*self.value1_from_Y +
-                                                                  (special_status_bits)*self.value1_from_P_push_bits +
+                                                                  (special_status_bits)*self.value1_from_status_push_bits +
                                                                   (state.stack_offset)*self.value1_from_stack_offset)
 
         new_value2 = computation_state.value2*self.value2_keep + ((computation_state.value1>>6) & 0x01)*self.value2_from_value1_bit6
@@ -423,49 +464,11 @@ class Region_Rewire(Region):
         state.stack_offset = new_stack_offset
 
     def args_OK(self):
-        return ['value1_from_A', 'value2_from_value1_bit6',
-                'A_from_value1', 'X_from_value1',
+        return ['value1_from_A',
+                'value1_from_status_push_bits',
+                'value2_from_value1_bit6',
+                'A_from_value1', 'X_from_value1', 'Y_from_value1',
                 'program_counter_from_address']
-
-class Region_Branch(Region):
-    def __init__(self, flag_match=0,
-                 N_flag_branch=0,
-                 O_flag_branch=0,
-                 Z_flag_branch=0,
-                 C_flag_branch=0):
-        self.flag_match = flag_match
-        self.N_flag_branch = N_flag_branch
-        self.O_flag_branch = O_flag_branch
-        self.Z_flag_branch = Z_flag_branch
-        self.C_flag_branch = C_flag_branch
-
-    def transition(self, state, computation_state):
-        condition = ((state.N == self.flag_match)*self.N_flag_branch +
-                     (state.O == self.flag_match)*self.O_flag_branch +
-                     (state.Z == self.flag_match)*self.Z_flag_branch +
-                     (state.C == self.flag_match)*self.C_flag_branch)
-
-        state.program_counter = state.program_counter + np.int8((computation_state.value1)*condition)
-
-    def args_OK(self):
-        return ['flag_match', 'N_flag_branch', 'O_flag_branch', 'Z_flag_branch', 'C_flag_branch']
-
-class Region_StackWrite:
-    def __init__(self, write_from_value1=0):
-        self.write_from_value1 = write_from_value1
-
-    def transition(self, state, computation_state):
-        address = ComputationState.NULL_ADDRESS*(1-self.write_from_value1) + (STACK_ZERO + state.stack_offset)*self.write_from_value1
-        state.memory[address] = computation_state.value1
-
-class Region_StackOffset:
-    def __init__(self, offset_keep=1, offset_adjust=0):
-        self.offset_keep = offset_keep
-        self.offset_adjust = offset_adjust
-
-    def transition(self, state, computation_state):
-        state.stack_offset = state.stack_offset*self.offset_keep + self.offset_adjust
-        value = state.memory[STACK_ZERO + state.stack_offset]
 
 class Region_Flags(Region):
     def __init__(self, N_keep=1, N_adjust=0, N_adjust_source=Wire.NULL,
@@ -475,7 +478,8 @@ class Region_Flags(Region):
                        D_keep=1, D_adjust=0,
                        I_keep=1, I_adjust=0,
                        Z_keep=1, Z_adjust=0, Z_adjust_source=Wire.NULL,
-                       C_keep=1, C_adjust=0, C_adjust_direct=Wire.NULL):
+                       C_keep=1, C_adjust=0, C_adjust_direct=Wire.NULL,
+                       set_byte_from_value1=0):
 
         self.N_keep, self.N_adjust = N_keep, N_adjust
         self.O_keep, self.O_adjust = O_keep, O_adjust
@@ -490,6 +494,8 @@ class Region_Flags(Region):
         self.O_adjust_direct = O_adjust_direct
         self.Z_adjust_source = Z_adjust_source
         self.C_adjust_direct = C_adjust_direct
+
+        self.set_byte_from_value1 = set_byte_from_value1
 
     def transition(self, state, computation_state):
         N_value = ((self.N_adjust_source == 1)*computation_state.value1 +
@@ -517,37 +523,43 @@ class Region_Flags(Region):
         state.Z = state.Z*self.Z_keep + self.Z_adjust + (Z_value == 0)*(self.Z_adjust_source != 0)
         state.C = state.C*self.C_keep + self.C_adjust + (C_direct_value)*(self.C_adjust_direct != 0)
 
+        byte = state.status_register_byte()
+        new_value = byte*(1-self.set_byte_from_value1) + computation_state.value1*self.set_byte_from_value1
+        state.status_register_byte_set(new_value)
+
     def args_OK(self):
         return ['N_keep', 'N_adjust', 'N_adjust_source',
                 'O_keep', 'O_adjust', 'O_adjust_direct',
                 'D_keep', 'D_adjust',
                 'I_keep', 'I_adjust',
                 'Z_keep', 'Z_adjust', 'Z_adjust_source',
-                'C_keep', 'C_adjust', 'C_adjust_direct']
-
-class Region_FlagsByte:
-    def __init__(self, set_from_value1=0):
-        self.set_from_value1 = set_from_value1
-
-    def transition(self, state, computation_state):
-        byte = state.status_register_byte()
-        new_value = byte*(1-self.set_from_value1) + computation_state.value1*self.set_from_value1
-        state.status_register_byte_set(new_value)
-
+                'C_keep', 'C_adjust', 'C_adjust_direct',
+                'set_byte_from_value1']
 
 class Region_Write(Region):
-    def __init__(self, address_write_OK=0):
-        self.address_write_OK = address_write_OK
+    def __init__(self, memory_write_value1=0):
+        self.memory_write_value1 = memory_write_value1
 
     def transition(self, state, computation_state):
-        address = ComputationState.NULL_ADDRESS*(1-self.address_write_OK) + computation_state.address*self.address_write_OK
+        address = ComputationState.NULL_ADDRESS*(1-self.memory_write_value1) + computation_state.address*self.memory_write_value1
         state.memory[address] = computation_state.value1
 
     def args_OK(self):
-        return ['address_write_OK']
+        return ['memory_write_value1']
 
-    def __str__(self):
-        return ' '.join(f'''Region_Write{{.address_write={self.address_write}}}'''.split())
+class Region_StackWrite(Region):
+    def __init__(self, stack_write_value1=0, stack_offset_post_adjust=0):
+        self.stack_write_value1 = stack_write_value1
+        self.stack_offset_post_adjust = stack_offset_post_adjust
+
+    def transition(self, state, computation_state):
+        address = ComputationState.NULL_ADDRESS*(1-self.stack_write_value1) + (STACK_ZERO + state.stack_offset)*self.stack_write_value1
+        state.memory[address] = computation_state.value1
+
+        state.stack_offset += self.stack_offset_post_adjust
+
+    def args_OK(self):
+        return ['stack_write_value1', 'stack_offset_post_adjust']
 
 class Region_ProgramCounter(Region):
     def __init__(self, PC_increment=0):
@@ -557,9 +569,7 @@ class Region_ProgramCounter(Region):
         return ['PC_increment']
 
 class RegionComposition:
-    # todo order soure code
     def __init__(self, compare=Region_Compare(),
-                       stack_offset1=Region_StackOffset(),
                        stack_read=Region_StackRead(),
                        boolean_logic=Region_BooleanLogic(),
                        arithmetic=Region_Arithmetic(),
@@ -569,47 +579,49 @@ class RegionComposition:
                        rewire=Region_Rewire(),
                        branch=Region_Branch(),
                        stack_write=Region_StackWrite(),
-                       stack_offset2=Region_StackOffset(),
                        flags=Region_Flags(),
-                       flags_byte=Region_FlagsByte(),
                        write=Region_Write()):
 
-        regions = [
+        self.regions = [
             # (wire, Region_Wire),
-            (compare, Region_Compare),
-            (stack_offset1, Region_StackOffset),
-            (stack_read, Region_StackRead),
-            (boolean_logic, Region_BooleanLogic),
-            (arithmetic, Region_Arithmetic),
-            (adc_sbc, Region_ADC_SBC),
-            (jsr_rts_rti, Region_JSR_RTS_RTI),
-            (bit_shift, Region_BitShift),
-            (rewire, Region_Rewire),
-            (branch, Region_Branch),
-            (stack_write, Region_StackWrite),
-            (stack_offset2, Region_StackOffset),
-            (flags, Region_Flags),
-            (flags_byte, Region_FlagsByte),
-            (write, Region_Write)
+            ("compare", compare, Region_Compare),
+            ("boolean_logic", boolean_logic, Region_BooleanLogic),
+            ("bit_shift", bit_shift, Region_BitShift),
+            ("arithmetic", arithmetic, Region_Arithmetic),
+            ("stack_read", stack_read, Region_StackRead),
+            ("adc_sbc", adc_sbc, Region_ADC_SBC),
+            ("jsr_rts_rti", jsr_rts_rti, Region_JSR_RTS_RTI),
+            ("branch", branch, Region_Branch),
+            ("rewire", rewire, Region_Rewire),
+            ("flags", flags, Region_Flags),
+            ("write", write, Region_Write),
+            ("stack_write", stack_write, Region_StackWrite),
         ]
 
-        self.regions = [a for a, _ in regions]
-        assert all(isinstance(region, type_) for region, type_ in regions), None
+        assert all(isinstance(region, type_) for name, region, type_ in self.regions), None
 
     def transition(self, state, computation_state):
-        for region in self.regions:
+        for _name, region, _class in self.regions:
             region.transition(state, computation_state)
 
     def struct(self, wire_region, byte_count):
-        regions = [
-            ("wire", wire_region),
-            ("boolean_logic", self.regions[3]),
-            ("jsr_rts_rti", self.regions[6]),
-            ("rewire", self.regions[8]),
-            ("branch", self.regions[9]),
-            ("flags", self.regions[12]),
-            ("write", self.regions[14]),
-            ("program_counter", Region_ProgramCounter(PC_increment=byte_count))
+        regions_OK = [
+            "wire",
+            "stack_read",
+            "boolean_logic",
+            "arithmetic",
+            "adc_sbc",
+            "jsr_rts_rti",
+            "rewire",
+            "branch",
+            "write",
+            "stack_write",
+            "flags",
+            "program_counter",
+            "compare"
         ]
+
+        regions = [(name, region) for name, region, _class in self.regions if name in regions_OK]
+        regions = [("wire", wire_region)] + regions + [("program_counter", Region_ProgramCounter(PC_increment=byte_count))]
 
         return 'RegionComposition{' + ', '.join(f'.{name}={region.struct_form()}' for name, region in regions) + '}'

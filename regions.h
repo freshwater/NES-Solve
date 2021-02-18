@@ -2,6 +2,10 @@
 struct Region_Wire {
     flag_t value1_from_data1 = 0;
     flag_t value1_from_zeropage_dereference = 0;
+    flag_t value1_from_absolute_dereference = 0;
+    flag_t value1_from_indirect_x_dereference = 0;
+
+    flag_t value1_from_stack_offset = 0;
 
     flag_t value1_from_A = 0;
     flag_t value1_from_X = 0;
@@ -9,19 +13,37 @@ struct Region_Wire {
 
     flag_t address_from_absolute = 0;
     flag_t address_from_zeropage = 0;
+    flag_t address_from_indirect_x = 0;
 
     __device__
     void transition(SystemState* state, ComputationState* computation_state) const {
-        // return state.memory[(ComputationState.NULL_ADDRESS)*(1-condition) + (address)*condition]*condition
-        int16u_t zeropage_address = (NULL_ADDRESS_READ)*(1-value1_from_zeropage_dereference) + (computation_state->data1)*value1_from_zeropage_dereference;
+        flag_t any_indirect = value1_from_indirect_x_dereference + address_from_indirect_x;
+        flag_t any_indirect_x = value1_from_indirect_x_dereference + address_from_indirect_x;
+
+        int16u_t address_L = (NULL_ADDRESS_READ+0)*(1-any_indirect) + (0xFF & (computation_state->data1 + (state->X)*any_indirect_x))*any_indirect;
+        int16u_t address_H = (NULL_ADDRESS_READ+1)*(1-any_indirect) + (0xFF & (computation_state->data1 + (state->X)*any_indirect_x + 1))*any_indirect;
+
+        int16u_t address_L_indirect = state->memory[address_L];
+        int16u_t address_H_indirect = state->memory[address_H];
+
+        flag_t any_dereference = value1_from_zeropage_dereference + value1_from_absolute_dereference + value1_from_indirect_x_dereference;
+        int16u_t address_x_indirect = (NULL_ADDRESS_READ)*(1-value1_from_indirect_x_dereference) + ((address_H_indirect << 8) + address_L_indirect)*value1_from_indirect_x_dereference;
+
+        int16u_t address_dereference = (NULL_ADDRESS_READ)*(1-any_dereference) + ((computation_state->data1)*value1_from_zeropage_dereference +
+                                                                                  ((computation_state->data2 << 8) + computation_state->data1)*value1_from_absolute_dereference +
+                                                                                  ((address_H_indirect << 8) + address_L_indirect)*value1_from_indirect_x_dereference);
+
         computation_state->value1 = ((computation_state->data1)*value1_from_data1 +
-                                     (state->memory[zeropage_address])*value1_from_zeropage_dereference +
+                                     (state->memory[address_dereference])*any_dereference +
+                                     (state->stack_offset)*value1_from_stack_offset +
                                      (state->A)*value1_from_A +
                                      (state->X)*value1_from_X +
                                      (state->Y)*value1_from_Y);
 
+        address_x_indirect = (NULL_ADDRESS_READ)*(1-address_from_indirect_x) + ((address_H_indirect << 8) + address_L_indirect)*address_from_indirect_x;
         computation_state->address = (((computation_state->data2 << 8) | computation_state->data1)*address_from_absolute +
-                                      (computation_state->data1)*address_from_zeropage);
+                                      (computation_state->data1)*address_from_zeropage +
+                                      (address_x_indirect)*address_from_indirect_x);
     }
 };
 
@@ -94,6 +116,33 @@ struct Region_BooleanLogic {
     }
 };
 
+struct Region_BitShift {
+    flag_t left_shift_from_value1 = 0;
+    flag_t right_shift_from_value1 = 0;
+    flag_t left_rotate_from_value1 = 0;
+    flag_t right_rotate_from_value1 = 0;
+    flag_t value1_out = 0;
+    flag_t value3_from_carry = 0;
+
+    __device__
+    void transition(SystemState* state, ComputationState* computation_state) const {
+        flag_t any_ = left_shift_from_value1 + right_shift_from_value1 + left_rotate_from_value1 + right_rotate_from_value1;
+        flag_t any_right = right_shift_from_value1 + right_rotate_from_value1;
+        flag_t any_left = left_shift_from_value1 + left_rotate_from_value1;
+        flag_t any_rotate = left_rotate_from_value1 + right_rotate_from_value1;
+
+        int8u_t new_ = (computation_state->value1)*(1-any_) + ((computation_state->value1 >> 1)*any_right +
+                                                               (computation_state->value1 << 1)*any_left);
+
+        int8u_t new_carry = (computation_state->value1 & 0x01)*any_right + (computation_state->value1 >> 7)*any_left;
+        new_ = new_*(1-any_rotate) + (((state->C << 7) | new_)*right_rotate_from_value1 +
+                                      ((state->C << 0) | new_)*left_rotate_from_value1);
+
+        computation_state->value1 = (computation_state->value1)*(1-value1_out) + (new_)*value1_out;
+        computation_state->value3 = (computation_state->value3)*(1-value3_from_carry) + (new_carry)*value3_from_carry;
+    }
+};
+
 struct Region_Arithmetic {
     int_signed_t value1_increment = 0;
 
@@ -133,7 +182,7 @@ struct Region_JSR_RTS_RTI {
 
     __device__
     void transition(SystemState* state, ComputationState* computation_state) const {
-        int16u_t program_counter = state->program_counter + (-1)*(int)jsr_OK;
+        int16u_t program_counter = state->program_counter + (-1 + 3)*(int)jsr_OK;
         int8u_t pc_H = program_counter >> 8;
         int8u_t pc_L = program_counter & 0x00FF;
 
@@ -141,18 +190,10 @@ struct Region_JSR_RTS_RTI {
         int_t pre_offset = rts_OK + rti_OK;
         int_t post_offset = -jsr_OK;
 
-        state->stack_offset += rti_OK;
-
-        int16u_t read_address = (NULL_ADDRESS_READ)*(1-rti_OK) + (STACK_ZERO + state->stack_offset)*rti_OK;
-        // int8u_t new_status = (state->memory[read_address])*rti_OK;
-        // new_status = behaviors.Behaviors.read_special_status_bits_on_pull(state, new_status, is_PLP_or_RTI=self.rti_OK)
-        // new_status = (state.status_register_byte())*(1-self.rti_OK) + (new_status)*self.rti_OK
-        // state.status_register_byte_set(new_status)
-
         state->stack_offset += pre_offset;
 
         int16u_t write_address = (NULL_ADDRESS_WRITE)*(1-jsr_OK) + (STACK_ZERO + state->stack_offset)*jsr_OK;
-        read_address = (NULL_ADDRESS_READ)*(1-any_rt) + (STACK_ZERO + state->stack_offset)*any_rt;
+        int16u_t read_address = (NULL_ADDRESS_READ)*(1-any_rt) + (STACK_ZERO + state->stack_offset)*any_rt;
         state->memory[write_address] = pc_H;
         pc_L = (pc_L)*(1-any_rt) + (state->memory[read_address])*any_rt;
 
@@ -169,7 +210,7 @@ struct Region_JSR_RTS_RTI {
         flag_t any_ = jsr_OK + rts_OK + rti_OK;
         int16u_t new_program_counter = (program_counter)*(1-any_) + (computation_state->address)*jsr_OK + ((pc_H << 8) + pc_L)*any_rt;
         // new_program_counter = (program_counter)*(1-jsr_OK) + (computation_state->address)*jsr_OK;
-        new_program_counter = new_program_counter + (1 + 3)*rts_OK;
+        new_program_counter = new_program_counter + (1)*rts_OK + (-1)*(int_signed_t)rti_OK;
 
         state->program_counter = (state->program_counter)*(1-any_) + (new_program_counter)*any_;
     }
@@ -185,6 +226,7 @@ struct Region_Rewire {
     flag_t Y_from_value1 = 0;
 
     flag_t program_counter_from_address = 0;
+    flag_t stack_offset_from_X = 0;
 
     __device__
     void transition(SystemState* state, ComputationState* computation_state) const {
@@ -200,6 +242,8 @@ struct Region_Rewire {
         int8u_t new_value2 = (computation_state->value2)*(1-value2_from_value1_bit6) + ((computation_state->value1 >> 6) & 0x01)*value2_from_value1_bit6;
         int16u_t new_program_counter = (state->program_counter)*(1-program_counter_from_address) + (computation_state->address)*program_counter_from_address;
 
+        int8u_t new_stack_offset = (state->stack_offset)*(1-stack_offset_from_X) + (state->X)*stack_offset_from_X;
+
         state->A = new_A;
         state->X = new_X;
         state->Y = new_Y;
@@ -208,6 +252,7 @@ struct Region_Rewire {
         computation_state->value2 = new_value2;
 
         state->program_counter = new_program_counter;
+        state->stack_offset = new_stack_offset;
     }
 };
 
@@ -329,6 +374,7 @@ struct RegionComposition {
     const Region_Wire wire;
     const Region_Compare compare;
     const Region_BooleanLogic boolean_logic;
+    const Region_BitShift bit_shift;
     const Region_Arithmetic arithmetic;
     const Region_StackRead stack_read;
     const Region_ADC_SBC adc_sbc;
@@ -342,12 +388,11 @@ struct RegionComposition {
 
     __device__
     void dg(SystemState* state, ComputationState* computation_state) const {
-        if (threadIdx.x == 7 && state->program_counter == 0xCC1E) {
-            printf("[%X, %X, %X, %d]\n",
+        if (threadIdx.x == 7 && state->program_counter >= 0xCDAE) {
+            printf("[%X, %X, %X]\n",
                 state->program_counter,
-                computation_state->value1,
-                state->statusRegisterByteGet(),
-                state->Z);
+                state->memory[0x07FF],
+                state->X);
         }
     }
 
@@ -356,6 +401,7 @@ struct RegionComposition {
         wire.transition(state, computation_state);
         compare.transition(state, computation_state);
         boolean_logic.transition(state, computation_state);
+        bit_shift.transition(state, computation_state);
         arithmetic.transition(state, computation_state);
         stack_read.transition(state, computation_state);
         adc_sbc.transition(state, computation_state);

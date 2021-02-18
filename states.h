@@ -42,7 +42,7 @@ struct SystemState {
     ComputationState computation_state;
 
     #ifdef DEBUG
-    Trace traceLineData[0x300];
+    Trace traceLineData[0x5000];
     int traceIndex = 0;
     #endif
 
@@ -98,12 +98,16 @@ struct OperationInformation {
     std::string doFormat(int8u_t byte1, int8u_t byte2, int16u_t program_counter) {
         char cs[10];
 
-        if (format_type == "Absolute") {
+        if (format_type == "Absolute" || format_type == "AbsoluteDereference") {
             sprintf(cs, "$%04X ", (((uint8_t)byte2 << 8) | (uint8_t)byte1) & 0xFFFF);
         } else if (format_type == "Immediate") {
             sprintf(cs, "#$%02X ", (uint8_t)byte1);
-        } else if (format_type == "Zeropage" | format_type == "ZeropageDereference") {
+        } else if (format_type == "Zeropage" || format_type == "ZeropageDereference") {
             sprintf(cs, "$%02X ", (uint8_t)byte1);
+        } else if (format_type == "IndirectX") {
+            sprintf(cs, "($%02X,X) ", (uint8_t)byte1);
+        } else if (format_type == "IndirectY") {
+            sprintf(cs, "($%02X),Y ", (uint8_t)byte1);
         } else if (format_type == "Implied") {
             strcpy(cs, "");
         } else if (format_type == "Address_Relative") {

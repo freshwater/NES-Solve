@@ -5,7 +5,7 @@
 #include <vector>
 #include <math.h>
 
-#define DEBUG NULL
+#define DEBUG 1
 
 #define NULL_ADDRESS_MARGIN 4
 #define NULL_ADDRESS_READ (0x10000 + 0)
@@ -38,7 +38,7 @@ void operationTransition(uint8_t opcode, SystemState* state, ComputationState* c
 __global__
 void add(int num_states, SystemState *states)
 {
-    for (int i = 0; i < 0x2B0; i++) {
+    for (int i = 0; i < 0xC00; i++) {
         states[threadIdx.x].next();
     }
 }

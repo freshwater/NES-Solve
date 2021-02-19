@@ -18,12 +18,22 @@ struct ComputationState {
     int8u_t value1;
     int8u_t value2;
     int8u_t value3;
+
     int16u_t address;
+};
+
+struct Memory {
+    int8u_t array[0x10000 + NULL_ADDRESS_MARGIN] = {};
+
+    __device__
+    int8u_t & operator[](int index) {
+        return array[index % 0x10000];
+    }
 };
 
 struct SystemState {
     int8u_t program_counter; 
-    int8u_t memory[0x10000 + NULL_ADDRESS_MARGIN] = {};
+    Memory memory;
     int8u_t stack_offset;
 
     int8u_t A = 0;
@@ -47,7 +57,8 @@ struct SystemState {
     #endif
 
     SystemState(std::vector<char>& program, int program_counter, int load_point) {
-        std::copy(program.begin(), program.end(), &memory[load_point]);
+        // std::copy(program.begin(), program.end(), &memory[load_point]);
+        std::copy(program.begin(), program.end(), &memory.array[load_point]);
         this->program_counter = program_counter;
         this->stack_offset = 0xFD;
     }
@@ -79,7 +90,8 @@ struct SystemState {
 
     __device__
     void next() {
-        int8u_t* opcodes = &memory[program_counter];
+        // int8u_t* opcodes = &memory[program_counter];
+        int8u_t* opcodes = &memory.array[program_counter];
 
         traceWrite(program_counter, opcodes);
 
@@ -100,12 +112,22 @@ struct OperationInformation {
 
         if (format_type == "Absolute" || format_type == "AbsoluteDereference") {
             sprintf(cs, "$%04X ", (((uint8_t)byte2 << 8) | (uint8_t)byte1) & 0xFFFF);
+        } else if (format_type == "AbsoluteAddressDereference") {
+            sprintf(cs, "($%04X) ", (((uint8_t)byte2 << 8) | (uint8_t)byte1) & 0xFFFF);
+        } else if (format_type == "AbsoluteX") {
+            sprintf(cs, "$%04X,X ", (((uint8_t)byte2 << 8) | (uint8_t)byte1) & 0xFFFF);
+        } else if (format_type == "AbsoluteY") {
+            sprintf(cs, "$%04X,Y ", (((uint8_t)byte2 << 8) | (uint8_t)byte1) & 0xFFFF);
         } else if (format_type == "Immediate") {
             sprintf(cs, "#$%02X ", (uint8_t)byte1);
         } else if (format_type == "Zeropage" || format_type == "ZeropageDereference") {
             sprintf(cs, "$%02X ", (uint8_t)byte1);
         } else if (format_type == "IndirectX") {
             sprintf(cs, "($%02X,X) ", (uint8_t)byte1);
+        } else if (format_type == "ZeropageX") {
+            sprintf(cs, "$%02X,X ", (uint8_t)byte1);
+        } else if (format_type == "ZeropageY") {
+            sprintf(cs, "$%02X,Y ", (uint8_t)byte1);
         } else if (format_type == "IndirectY") {
             sprintf(cs, "($%02X),Y ", (uint8_t)byte1);
         } else if (format_type == "Implied") {

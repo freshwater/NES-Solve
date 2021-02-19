@@ -3,7 +3,14 @@ struct Region_Wire {
     flag_t value1_from_data1 = 0;
     flag_t value1_from_zeropage_dereference = 0;
     flag_t value1_from_absolute_dereference = 0;
+
+    flag_t value1_from_zeropage_x_dereference = 0;
+    flag_t value1_from_absolute_x_dereference = 0;
     flag_t value1_from_indirect_x_dereference = 0;
+
+    flag_t value1_from_zeropage_y_dereference = 0;
+    flag_t value1_from_absolute_y_dereference = 0;
+    flag_t value1_from_indirect_y_dereference = 0;
 
     flag_t value1_from_stack_offset = 0;
 
@@ -12,26 +19,46 @@ struct Region_Wire {
     flag_t value1_from_Y = 0;
 
     flag_t address_from_absolute = 0;
+    flag_t address_from_absolute_y = 0;
+    flag_t address_from_absolute_dereference = 0;
     flag_t address_from_zeropage = 0;
+    flag_t address_from_zeropage_x = 0;
+    flag_t address_from_absolute_x = 0;
     flag_t address_from_indirect_x = 0;
+    flag_t address_from_zeropage_y = 0;
+    flag_t address_from_indirect_y = 0;
 
     __device__
     void transition(SystemState* state, ComputationState* computation_state) const {
-        flag_t any_indirect = value1_from_indirect_x_dereference + address_from_indirect_x;
+        flag_t any_indirect = value1_from_indirect_x_dereference + value1_from_indirect_y_dereference + address_from_indirect_x + address_from_indirect_y;
         flag_t any_indirect_x = value1_from_indirect_x_dereference + address_from_indirect_x;
 
         int16u_t address_L = (NULL_ADDRESS_READ+0)*(1-any_indirect) + (0xFF & (computation_state->data1 + (state->X)*any_indirect_x))*any_indirect;
         int16u_t address_H = (NULL_ADDRESS_READ+1)*(1-any_indirect) + (0xFF & (computation_state->data1 + (state->X)*any_indirect_x + 1))*any_indirect;
 
+        address_L = (address_L)*(1-address_from_absolute_dereference) + ((computation_state->data2 << 8) + computation_state->data1)*address_from_absolute_dereference;
+        address_H = (address_H)*(1-address_from_absolute_dereference) + ((computation_state->data2 << 8) + (0xFF & (computation_state->data1 + 1)))*address_from_absolute_dereference;
+
+        int16u_t address_zeropage_dereference = (NULL_ADDRESS_READ)*(1-value1_from_zeropage_x_dereference) + (0xFF & (computation_state->data1 + state->X))*value1_from_zeropage_x_dereference;
+        int16u_t address_zeropage_y_dereference = (NULL_ADDRESS_READ)*(1-value1_from_zeropage_y_dereference) + (0xFF & (computation_state->data1 + state->Y))*value1_from_zeropage_y_dereference;
+
         int16u_t address_L_indirect = state->memory[address_L];
         int16u_t address_H_indirect = state->memory[address_H];
 
-        flag_t any_dereference = value1_from_zeropage_dereference + value1_from_absolute_dereference + value1_from_indirect_x_dereference;
+        flag_t any_dereference = value1_from_zeropage_dereference + value1_from_absolute_dereference + value1_from_absolute_y_dereference +
+                                 value1_from_indirect_x_dereference + value1_from_indirect_y_dereference + value1_from_zeropage_x_dereference +
+                                 value1_from_zeropage_y_dereference + value1_from_absolute_x_dereference;
+
         int16u_t address_x_indirect = (NULL_ADDRESS_READ)*(1-value1_from_indirect_x_dereference) + ((address_H_indirect << 8) + address_L_indirect)*value1_from_indirect_x_dereference;
 
         int16u_t address_dereference = (NULL_ADDRESS_READ)*(1-any_dereference) + ((computation_state->data1)*value1_from_zeropage_dereference +
                                                                                   ((computation_state->data2 << 8) + computation_state->data1)*value1_from_absolute_dereference +
-                                                                                  ((address_H_indirect << 8) + address_L_indirect)*value1_from_indirect_x_dereference);
+                                                                                  ((address_H_indirect << 8) + address_L_indirect)*value1_from_indirect_x_dereference +
+                                                                                  ((address_H_indirect << 8) + address_L_indirect + (state->Y)*value1_from_indirect_y_dereference)*value1_from_indirect_y_dereference +
+                                                                                  ((computation_state->data2 << 8) + computation_state->data1 + state->X)*value1_from_absolute_x_dereference +
+                                                                                  ((computation_state->data2 << 8) + computation_state->data1 + state->Y)*value1_from_absolute_y_dereference +
+                                                                                  (address_zeropage_dereference)*value1_from_zeropage_x_dereference +
+                                                                                  (address_zeropage_y_dereference)*value1_from_zeropage_y_dereference);
 
         computation_state->value1 = ((computation_state->data1)*value1_from_data1 +
                                      (state->memory[address_dereference])*any_dereference +
@@ -41,9 +68,17 @@ struct Region_Wire {
                                      (state->Y)*value1_from_Y);
 
         address_x_indirect = (NULL_ADDRESS_READ)*(1-address_from_indirect_x) + ((address_H_indirect << 8) + address_L_indirect)*address_from_indirect_x;
+        int16u_t address_y_indirect = (NULL_ADDRESS_READ)*(1-address_from_indirect_y) + ((address_H_indirect << 8) + address_L_indirect + (state->Y)*address_from_indirect_y)*address_from_indirect_y;
+
         computation_state->address = (((computation_state->data2 << 8) | computation_state->data1)*address_from_absolute +
                                       (computation_state->data1)*address_from_zeropage +
-                                      (address_x_indirect)*address_from_indirect_x);
+                                      (0xFF & (computation_state->data1 + state->X))*address_from_zeropage_x +
+                                      (address_x_indirect)*address_from_indirect_x +
+                                      (address_y_indirect)*address_from_indirect_y +
+                                      ((address_H_indirect << 8) + address_L_indirect)*address_from_absolute_dereference +
+                                      (0xFF & (computation_state->data1 + state->Y))*address_from_zeropage_y +
+                                      ((computation_state->data2 << 8) + computation_state->data1 + state->X)*address_from_absolute_x +
+                                      ((computation_state->data2 << 8) + computation_state->data1 + state->Y)*address_from_absolute_y);
     }
 };
 
@@ -281,6 +316,7 @@ struct Region_Write {
     void transition(SystemState* state, ComputationState* computation_state) const {
         int16u_t address = (NULL_ADDRESS_WRITE)*(1-memory_write_value1) + (computation_state->address)*memory_write_value1;
         state->memory[address] = computation_state->value1;
+
     }
 };
 

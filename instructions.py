@@ -39,7 +39,7 @@ def absolute_address_dereference(): # state, data1, data2):
     # L = state.memory[data2*0x0100 + data1]
     # H = state.memory[data2*0x0100 + byte(data1 + 1)]
     # return H*0x0100 + L
-    return Region_Wire(address_from_absolute_indirect=1)
+    return Region_Wire(address_from_absolute_dereference=1)
 
 def zeropage_dereference(): # state, data1, _data2):
     # return state.memory[data1]
@@ -70,14 +70,14 @@ def absolute_x(): # state, data1, data2):
 
 def zeropage_x_dereference(): # state, data1, _data2):
     # return state.memory[byte(data1 + state.X)]
-    return Region_Wire(value1_from_zeropage_x=1)
+    return Region_Wire(value1_from_zeropage_x_dereference=1)
 
 def zeropage_x_address(): # state, data1, _data2):
     # return byte(data1 + state.X)
     return Region_Wire(address_from_zeropage_x=1)
 
 def zeropage_x():
-    return Region_Wire(value1_from_zeropage_x=1, address_from_zeropage_x=1)
+    return Region_Wire(value1_from_zeropage_x_dereference=1, address_from_zeropage_x=1)
 
 def indirect_x_dereference(): # state, data1, _data2):
     # L = state.memory[byte(data1 + state.X)]
@@ -107,7 +107,7 @@ def absolute_y_address(): # state, data1, data2):
 
 def zeropage_y_dereference(): # state, data1, _data2):
     # return state.memory[byte(data1 + state.Y)]
-    return Region_Wire(value1_from_zeropage_y=1)
+    return Region_Wire(value1_from_zeropage_y_dereference=1)
 
 def zeropage_y_address(): # state, data1, _data2):
     # return byte(data1 + state.Y)
@@ -787,13 +787,25 @@ if __name__ == '__main__':
         absolute_address: "Absolute",
         absolute: "Absolute",
         absolute_dereference: "AbsoluteDereference",
+        absolute_address_dereference: "AbsoluteAddressDereference",
+        absolute_y_dereference: "AbsoluteY",
+        absolute_y_address: "AbsoluteY",
         zeropage_address: "Zeropage",
         zeropage_dereference: "ZeropageDereference",
+        zeropage_x: "ZeropageX",
+        zeropage_x_dereference: "ZeropageX",
+        zeropage_x_address: "ZeropageX",
         implied: "Implied",
         relative_address: "Address_Relative",
         indirect_x_dereference: "IndirectX",
         indirect_x_address: "IndirectX",
-        indirect_y_dereference: "IndirectY"
+        indirect_y_dereference: "IndirectY",
+        indirect_y_address: "IndirectY",
+        zeropage_y_dereference: "ZeropageY",
+        zeropage_y_address: "ZeropageY",
+        absolute_x_dereference: "AbsoluteX",
+        absolute_x_address: "AbsoluteX",
+        absolute_x: "AbsoluteX"
     }
 
     for opcode in range(256):
@@ -806,28 +818,32 @@ if __name__ == '__main__':
                       0x84, 0xA6, 0x05, 0x25, 0x45, 0x65, 0xC5, 0xE5, 0xE4, 0xC4, 0x46,
                       0x06, 0x66, 0x26, 0xE6, 0xC6, 0xAC, 0x8C, 0x2C, 0x0D, 0x2D, 0x4D,
                       0x6D, 0xCD, 0xED, 0xEC, 0xCC, 0x4E, 0x0E, 0x6E, 0x2E, 0xEE, 0xCE,
-                      0xB1]:
+                      0xB1, 0x11, 0x31, 0x51, 0x71, 0xD1, 0xF1, 0x91, 0x6C, 0xB9, 0x19,
+                      0x39, 0x59, 0x79, 0xD9, 0xF9, 0x99, 0xB4, 0x94, 0x15, 0x35, 0x55,
+                      0x75, 0xD5, 0xF5, 0xB5, 0x95, 0x56, 0x16, 0x76, 0x36, 0xF6, 0xD6,
+                      0xB6, 0x96, 0xBC, 0x1D, 0x3D, 0x5D, 0x7D, 0xDD, 0xFD, 0xBD, 0x9D,
+                      0x5E, 0x1E, 0x7E, 0x3E, 0xFE, 0xDE, 0xBE]:
             operation, byte_count, addressing, wire = instructions[opcode]
             region = operation()
             wire = wire or addressing()
 
             pc_increment = byte_count
-            if opcode in [0x4C, 0x20, 0x60]:
+            if opcode in [0x4C, 0x20, 0x60, 0x6C]:
                 # instructions that directly modify the program counter
                 pc_increment = 0
 
             name = operation.__name__
             if opcode == 0x24:
                 name = "BIT"
-            if opcode in [0x46, 0x4E]:
+            if opcode in [0x46, 0x4E, 0x56, 0x5E]:
                 name = "LSR"
-            if opcode in [0x06, 0x0E]:
+            if opcode in [0x06, 0x0E, 0x16, 0x1E]:
                 name = "ASL"
-            if opcode in [0x66, 0x6E]:
+            if opcode in [0x66, 0x6E, 0x76, 0x7E]:
                 name = "ROR"
-            if opcode in [0x26, 0x2E]:
+            if opcode in [0x26, 0x2E, 0x36, 0x3E]:
                 name = "ROL"
-            if opcode in [0xC6, 0xCE]:
+            if opcode in [0xC6, 0xCE, 0xD6, 0xDE]:
                 name = "DEC"
 
             operations.append(f'/*0x{opcode:02X}*//*{name}*/{region.struct(wire_region=wire, byte_count=pc_increment)}')

@@ -52,20 +52,26 @@ class Region:
 
 class Region_Wire(Region):
     def __init__(self, 
-                 value1_from_address=0, value1_from_data1=0,
+                 value1_from_address=0,
+                 value1_from_data1=0,
                  value1_from_zeropage_dereference=0,
                  value1_from_absolute_dereference=0,
-                 value1_from_indirect_x_dereference=0, 
+                 value1_from_zeropage_x_dereference=0,
+                 value1_from_absolute_x_dereference=0,
+                 value1_from_indirect_x_dereference=0,
+                 value1_from_zeropage_y_dereference=0,
+                 value1_from_absolute_y_dereference=0,
                  value1_from_indirect_y_dereference=0,
                  value1_from_stack_offset=0,
                  value1_from_A=0, value1_from_X=0, value1_from_Y=0,
-                 value1_from_zeropage_x=0, value1_from_absolute_y_dereference=0,
-                 value1_from_zeropage_y=0, address_from_absolute=0, address_from_zeropage=0,
-                 value1_from_absolute_x_dereference=0,
-                 address_from_indirect_x=0, address_from_indirect_y=0,
-                 address_from_zeropage_x=0, address_from_absolute_y=0,
-                 address_from_zeropage_y=0, address_from_absolute_indirect=0,
-                 address_from_absolute_x=0):
+                 address_from_absolute=0, address_from_absolute_y=0,
+                 address_from_absolute_dereference=0,
+                 address_from_zeropage=0,
+                 address_from_zeropage_x=0,
+                 address_from_absolute_x=0,
+                 address_from_indirect_x=0,
+                 address_from_zeropage_y=0,
+                 address_from_indirect_y=0):
         self.value1_from_A = value1_from_A
         self.value1_from_X = value1_from_X
         self.value1_from_Y = value1_from_Y
@@ -75,8 +81,8 @@ class Region_Wire(Region):
         self.value1_from_stack_offset = value1_from_stack_offset
         self.value1_from_absolute_dereference = value1_from_absolute_dereference
         self.value1_from_indirect_x_dereference = value1_from_indirect_x_dereference
-        self.value1_from_zeropage_x = value1_from_zeropage_x
-        self.value1_from_zeropage_y = value1_from_zeropage_y
+        self.value1_from_zeropage_x_dereference = value1_from_zeropage_x_dereference
+        self.value1_from_zeropage_y_dereference = value1_from_zeropage_y_dereference
         self.value1_from_indirect_y_dereference = value1_from_indirect_y_dereference
         self.value1_from_absolute_y_dereference = value1_from_absolute_y_dereference
         self.value1_from_absolute_x_dereference = value1_from_absolute_x_dereference
@@ -88,7 +94,7 @@ class Region_Wire(Region):
         self.address_from_absolute_y = address_from_absolute_y
         self.address_from_zeropage_x = address_from_zeropage_x
         self.address_from_zeropage_y = address_from_zeropage_y
-        self.address_from_absolute_indirect = address_from_absolute_indirect
+        self.address_from_absolute_dereference = address_from_absolute_dereference
         self.address_from_absolute_x = address_from_absolute_x
 
     def read_if(state, address, condition):
@@ -189,8 +195,8 @@ class Region_Wire(Region):
                                     (state.stack_offset)*self.value1_from_stack_offset +
                                     Region_Wire.read_if(state, computation_state.data2*0x0100 + computation_state.data1, self.value1_from_absolute_dereference) +
                                     Region_Wire.indirect_x_dereference(state, computation_state, self.value1_from_indirect_x_dereference) +
-                                    Region_Wire.zeropage_x_dereference(state, computation_state, self.value1_from_zeropage_x) +
-                                    Region_Wire.zeropage_y_dereference(state, computation_state, self.value1_from_zeropage_y) +
+                                    Region_Wire.zeropage_x_dereference(state, computation_state, self.value1_from_zeropage_x_dereference) +
+                                    Region_Wire.zeropage_y_dereference(state, computation_state, self.value1_from_zeropage_y_dereference) +
                                     Region_Wire.indirect_y_dereference(state, computation_state, self.value1_from_indirect_y_dereference) +
                                     Region_Wire.absolute_y_dereference(state, computation_state, self.value1_from_absolute_y_dereference) +
                                     Region_Wire.absolute_x_dereference(state, computation_state, self.value1_from_absolute_x_dereference))
@@ -202,18 +208,29 @@ class Region_Wire(Region):
                                      (Region_Wire.absolute_y_address(state, computation_state, self.address_from_absolute_y))*self.address_from_absolute_y +
                                      (Region_Wire.zeropage_x_address(state, computation_state, self.address_from_zeropage_x))*self.address_from_zeropage_x +
                                      (Region_Wire.zeropage_y_address(state, computation_state, self.address_from_zeropage_y))*self.address_from_zeropage_y +
-                                     (Region_Wire.absolute_address_indirect(state, computation_state, self.address_from_absolute_indirect))*self.address_from_absolute_indirect +
+                                     (Region_Wire.absolute_address_indirect(state, computation_state, self.address_from_absolute_dereference))*self.address_from_absolute_dereference +
                                      (Region_Wire.absolute_x_address(state, computation_state, self.address_from_absolute_x))*self.address_from_absolute_x)
 
     def args_OK(self):
         return ['value1_from_data1',
                 'value1_from_zeropage_dereference',
+                'value1_from_zeropage_x_dereference',
+                'value1_from_absolute_x_dereference',
                 'value1_from_absolute_dereference',
+                'value1_from_absolute_y_dereference',
                 'value1_from_indirect_x_dereference',
+                'value1_from_zeropage_y_dereference',
+                'value1_from_indirect_y_dereference',
                 'value1_from_stack_offset',
                 'value1_from_A', 'value1_from_X', 'value1_from_Y',
-                'address_from_absolute', 'address_from_zeropage',
-                'address_from_indirect_x']
+                'address_from_absolute',
+                'address_from_absolute_y',
+                'address_from_absolute_dereference', 'address_from_zeropage',
+                'address_from_zeropage_x',
+                'address_from_absolute_x',
+                'address_from_indirect_x',
+                'address_from_zeropage_y',
+                'address_from_indirect_y']
 
 class Region_Compare(Region):
     def __init__(self, A_compare_with_value1=0, X_compare_with_value1=0, Y_compare_with_value1=0,

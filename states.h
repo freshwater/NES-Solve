@@ -26,13 +26,13 @@ struct Memory {
     int8u_t array[0x10000 + NULL_ADDRESS_MARGIN] = {};
 
     __device__
-    int8u_t & operator[](int index) {
+    int8u_t& operator[](int index) {
         return array[index % 0x10000];
     }
 };
 
 struct SystemState {
-    int8u_t program_counter; 
+    int16u_t program_counter; 
     Memory memory;
     int8u_t stack_offset;
 
@@ -56,8 +56,7 @@ struct SystemState {
     int traceIndex = 0;
     #endif
 
-    SystemState(std::vector<char>& program, int program_counter, int load_point) {
-        // std::copy(program.begin(), program.end(), &memory[load_point]);
+    SystemState(std::vector<char>& program, int16u_t program_counter, int load_point) {
         std::copy(program.begin(), program.end(), &memory.array[load_point]);
         this->program_counter = program_counter;
         this->stack_offset = 0xFD;
@@ -90,7 +89,6 @@ struct SystemState {
 
     __device__
     void next() {
-        // int8u_t* opcodes = &memory[program_counter];
         int8u_t* opcodes = &memory.array[program_counter];
 
         traceWrite(program_counter, opcodes);

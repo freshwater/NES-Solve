@@ -481,12 +481,17 @@ def SBC() -> [(0xE1, indirect_x_dereference), (0xE5, zeropage_dereference), (0xE
                            Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1,
                            C_keep=0, C_adjust=0, C_adjust_direct=Wire.VALUE3))
 
-def STA() -> [(0x81, indirect_x_address), (0x8D, absolute_address), (0x85, zeropage_address),
-                      (0x91, indirect_y_address), (0x95, zeropage_x_address), (0x99, absolute_y_address),
-                      (0x9D, absolute_x_address)]:
+def STA() -> [(0x81, indirect_x_address, Region_Wire(value1_from_A=1, address_from_indirect_x=1)),
+              (0x8D, absolute_address, Region_Wire(value1_from_A=1, address_from_absolute=1)),
+              (0x85, zeropage_address, Region_Wire(value1_from_A=1, address_from_zeropage=1)),
+              (0x91, indirect_y_address, Region_Wire(value1_from_A=1, address_from_indirect_y=1)),
+              (0x95, zeropage_x_address, Region_Wire(value1_from_A=1, address_from_zeropage_x=1)),
+              (0x99, absolute_y_address, Region_Wire(value1_from_A=1, address_from_absolute_y=1)),
+              (0x9D, absolute_x_address, Region_Wire(value1_from_A=1, address_from_absolute_x=1))]:
+                      #todo
     # state.memory[a] = state.A
     return RegionComposition(
-        rewire=Region_Rewire(value1_from_A=1),
+        # rewire=Region_Rewire(value1_from_A=1),
         write=Region_Write(memory_write_value1=1))
 
 def STX() -> [(0x86, zeropage_address, Region_Wire(address_from_zeropage=1, value1_from_X=1)),

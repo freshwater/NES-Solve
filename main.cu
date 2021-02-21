@@ -5,6 +5,8 @@
 #include <vector>
 #include <math.h>
 
+#include <chrono>
+
 #define DEBUG 1
 
 #define NULL_ADDRESS_MARGIN 4
@@ -12,11 +14,13 @@
 #define NULL_ADDRESS_WRITE (0x10000 + 2)
 #define STACK_ZERO 0x0100
 
-typedef const uint32_t flag_t;
-typedef const uint32_t int_t;
-typedef const int32_t int_signed_t;
-typedef uint32_t int16u_t;
-typedef uint32_t int8u_t;
+typedef const uint8_t flag_t;
+typedef const uint16_t flag16_t;
+typedef const uint8_t int_t;
+typedef const int8_t int_signed_t;
+typedef uint16_t int16u_t;
+typedef uint8_t int8u_t;
+typedef uint8_t bit_t;
 
 struct SystemState;
 struct ComputationState;
@@ -36,9 +40,9 @@ void operationTransition(uint8_t opcode, SystemState* state, ComputationState* c
 /* */
 
 __global__
-void add(int num_states, SystemState *states)
+void add(int num_states, uint32_t num_instructions, SystemState *states)
 {
-    for (int i = 0; i < 0xC00; i++) {
+    for (int i = 0; i < num_instructions; i++) {
         states[threadIdx.x].next();
     }
 }
@@ -49,8 +53,14 @@ void add(int num_states, SystemState *states)
 
 int main(void)
 {
+    // int num_states = 256;
     int num_states = 15;
     SystemState *states;
+
+    uint64_t num_instructions = 0;
+    std::cin >> num_instructions;
+
+    std::cout << "NUM_INSTRUCTIONS [ " << num_instructions << ", " << sizeof(SystemState) << " ]\n\n";
 
     cudaMallocManaged(&states, num_states*sizeof(SystemState));
 
@@ -65,8 +75,14 @@ int main(void)
 
     /* */
 
-    add<<<1, num_states>>>(num_states, states);
+    auto start = std::chrono::high_resolution_clock::now();
+
+    add<<<1, num_states>>>(num_states, num_instructions, states);
     cudaDeviceSynchronize();
+
+    auto stop = std::chrono::high_resolution_clock::now();
+
+    std::cout << "\n> " << std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count() << "\n\n";
 
     /* */
 
@@ -96,7 +112,7 @@ int main(void)
         } else {
             std::cout << "\n" << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << i << "";
             std::cout << " · " << reference << "\n";
-            std::cout << "      " << lineCompare(reference, actual) << "\n";
+            std::cout << "     " << lineCompare(reference, actual) << "\n";
 
             mismatch_count++;
         }

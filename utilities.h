@@ -35,9 +35,12 @@ std::string traceLineFormat(Trace trace)
             unsigned((uint8_t)trace.X),
             unsigned((uint8_t)trace.Y));
 
-    sprintf(str[5], " P:%02X SP:%02X",
+    sprintf(str[5], " P:%02X SP:%02X PPU:[%d,%d] CYC:%d",
             unsigned((uint8_t)trace.status_register),
-            unsigned((uint8_t)trace.stack_offset));
+            unsigned((uint8_t)trace.stack_offset),
+            unsigned((uint16_t)trace.vertical_scan),
+            unsigned((uint16_t)trace.horizontal_scan),
+            unsigned((uint16_t)trace.cycle));
 
     using namespace std;
     return string(str[0]) + string(str[1]) + string(str[2]) + string(str[3]) + string(str[4]) + string(str[5]);
@@ -51,16 +54,20 @@ std::string logLineFormat(std::vector<std::string> line)
     int ppuI = -1;
     while (line[++ppuI] != "PPU:");
 
-    line = std::vector<std::string>(line.begin(), line.begin()+ppuI);
+    std::vector<std::string> line1 = std::vector<std::string>(line.begin(), line.begin()+ppuI);
     std::vector<std::string> reduced;
+
+    std::vector<std::string> line2 = std::vector<std::string>(line.begin()+ppuI, line.end());
 
     OperationInformation info = operation_info[opcode];
     int j = info.format_type == "Implied" ? 2 : 3;
-    for (int i = 0; i < line.size(); i++) {
-        if ((i < j + info.byte_count) | (line.size() - 6 < i)) {
-            reduced.push_back(line[i]);
+    for (int i = 0; i < line1.size(); i++) {
+        if ((i < j + info.byte_count) | (line1.size() - 6 < i)) {
+            reduced.push_back(line1[i]);
         }
     }
+
+    reduced.push_back(line2[0] + "[" + line2[1] + "," + line2[2] + "] " + line2[3]);
 
     std::string output;
     for (int i = 0; i < reduced.size(); i++) {
@@ -117,6 +124,12 @@ std::vector<std::vector<std::string>> logRead(std::string file_name)
 
     while (std::getline(file, line_string)) {
         std::vector<std::string> words;
+
+        for (int i = 40; i < line_string.size(); i++) {
+            if (line_string[i] == ',') {
+                line_string[i] = ' ';
+            }
+        }
 
         std::istringstream ss(line_string);
         std::string word;

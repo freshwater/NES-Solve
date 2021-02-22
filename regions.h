@@ -28,6 +28,8 @@ struct Region_Wire {
     flag16_t address_from_zeropage_y = 0;
     flag16_t address_from_indirect_y = 0;
 
+    int_t cycle_base_increment = 0;
+
     __device__
     void transition(SystemState* state, ComputationState* computation_state) const {
         flag_t any_indirect_x = value1_from_indirect_x_dereference | address_from_indirect_x;
@@ -75,6 +77,13 @@ struct Region_Wire {
                                       (address_absolute + state->X)&address_from_absolute_x |
                                       (address_absolute + state->Y)&address_from_absolute_y |
                                       (0x00FF&(computation_state->data1 + state->Y))&address_from_zeropage_y);
+
+        int_t extra_cycle = ((0xFF00&(address_absolute    + state->X)) != (0xFF00&(   address_absolute)))&value1_from_absolute_x_dereference |
+                            ((0xFF00&(address_HL_indirect + state->Y)) != (0xFF00&(address_HL_indirect)))&value1_from_indirect_y_dereference |
+                            ((0xFF00&(address_absolute    + state->Y)) != (0xFF00&(   address_absolute)))&value1_from_absolute_y_dereference;
+
+        computation_state->cycle += cycle_base_increment + extra_cycle;
+        computation_state->horizontal_scan += 3*(cycle_base_increment + extra_cycle);
     }
 };
 
@@ -289,6 +298,11 @@ struct Region_Branch {
                           (state->C == flag_match)&C_flag_branch);
 
         state->program_counter = state->program_counter + ((int8_t)(computation_state->value1))*condition;
+
+        computation_state->cycle += condition;
+        computation_state->horizontal_scan += 3*condition;
+        computation_state->vertical_scan += computation_state->horizontal_scan >= 341;
+        computation_state->horizontal_scan %= 341;
     }
 };
 

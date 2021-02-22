@@ -79,7 +79,8 @@ class Region_Wire(Region):
                  address_from_absolute_x: flag16 = 0,
                  address_from_indirect_x: flag16 = 0,
                  address_from_zeropage_y: flag16 = 0,
-                 address_from_indirect_y: flag16 = 0):
+                 address_from_indirect_y: flag16 = 0,
+                 cycle_base_increment: unsigned_int = None):
         self.value1_from_A = value1_from_A
         self.value1_from_X = value1_from_X
         self.value1_from_Y = value1_from_Y
@@ -104,6 +105,8 @@ class Region_Wire(Region):
         self.address_from_zeropage_y = address_from_zeropage_y
         self.address_from_absolute_dereference = address_from_absolute_dereference
         self.address_from_absolute_x = address_from_absolute_x
+
+        self.cycle_base_increment = cycle_base_increment
 
     def read_if(state, address, condition):
         # print(condition, state.memory[(ComputationState.NULL_ADDRESS)*(1-condition) + (address)*condition], state.memory[-1])
@@ -238,7 +241,8 @@ class Region_Wire(Region):
                 'address_from_absolute_x',
                 'address_from_indirect_x',
                 'address_from_zeropage_y',
-                'address_from_indirect_y']
+                'address_from_indirect_y',
+                'cycle_base_increment']
 
 class Region_Compare(Region):
     def __init__(self, A_compare_with_value1: flag = 0,

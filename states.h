@@ -9,6 +9,9 @@ struct Trace {
     int8u_t Y;
     int8u_t status_register;
     int8u_t stack_offset;
+    int16u_t vertical_scan;
+    int16u_t horizontal_scan;
+    int16u_t cycle;
 };
 
 struct ComputationState {
@@ -20,6 +23,10 @@ struct ComputationState {
     int8u_t value3;
 
     int16u_t address;
+
+    int16u_t vertical_scan = 0;
+    int16u_t horizontal_scan = 21;
+    int16u_t cycle = 7;
 };
 
 struct Memory {
@@ -80,7 +87,10 @@ struct SystemState {
             .X = X,
             .Y = Y,
             .status_register = statusRegisterByteGet(),
-            .stack_offset = stack_offset
+            .stack_offset = stack_offset,
+            .vertical_scan = computation_state.vertical_scan,
+            .horizontal_scan = computation_state.horizontal_scan,
+            .cycle = computation_state.cycle
         };
 
         traceIndex++;

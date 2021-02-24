@@ -34,6 +34,7 @@ void operationTransition(uint8_t, SystemState*, ComputationState*);
 
 __device__
 void operationTransition(uint8_t opcode, SystemState* state, ComputationState* computation_state) {
+    Region_VerticalBlank().transition(state, computation_state);
     instructions[opcode].transition(state, computation_state);
 }
 
@@ -51,7 +52,7 @@ void add(int num_states, uint32_t num_instructions, SystemState *states)
 
 /* */
 
-int main(void)
+int tests(void)
 {
     // int num_states = 256;
     int num_states = 15;
@@ -66,11 +67,11 @@ int main(void)
 
     /* */
 
-    std::vector<char> file_data = fileRead("data/nestest.program");
+    std::vector<char> program_data = romFileRead("roms/nestest.nes").first;
     std::vector<std::vector<std::string>> log_lines = logRead("data/nestest.log");
 
     for (int i = 0; i < num_states; i++) {
-        states[i] = SystemState(file_data, 0xC000 + i - 7, 0xC000);
+        states[i] = SystemState(program_data, 0xC000 + i - 7, 0xC000);
     }
 
     /* */
@@ -127,4 +128,94 @@ int main(void)
     cudaFree(states);
 
     return 0;
+}
+
+int software(void)
+{
+    // int num_states = 256;
+    int num_states = 15;
+    SystemState *states;
+
+    uint64_t num_instructions = 0;
+    std::cin >> num_instructions;
+
+    std::cout << "NUM_INSTRUCTIONS [ " << num_instructions << ", " << sizeof(SystemState) << " ]\n\n";
+
+    cudaMallocManaged(&states, num_states*sizeof(SystemState));
+
+    /* */
+
+    auto program_data = romFileRead("roms/Super Mario Bros..nes").first;
+    auto character_data = romFileRead("roms/Super Mario Bros..nes").second;
+
+    std::vector<std::vector<std::string>> log_lines = logRead("data/nestest.log");
+
+    for (int i = 0; i < num_states; i++) {
+        if (i == 7) {
+            states[i] = SystemState(program_data);
+        } else {
+            // states[i] = SystemState(program_data, 0xC000 + i - 7, 0xC000);
+            states[i] = SystemState(program_data);
+        }
+    }
+
+    /* */
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    add<<<1, num_states>>>(num_states, num_instructions, states);
+    cudaDeviceSynchronize();
+
+    auto stop = std::chrono::high_resolution_clock::now();
+
+    std::cout << "\n> " << std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count() << "\n\n";
+
+    /* */
+
+    #ifdef DEBUG
+
+    std::cout << "\n";
+    for (int i = 0; i < num_states; i++) {
+        if (i == 7 || i == 8) {
+            std::cout << "--------------------------" << "\n";
+        }
+
+        std::cout << traceLineFormat(states[i].traceLineData[states[i].traceIndex-1]) << "\n";
+    }
+
+    std::cout << "\n";
+
+    /* */
+
+    for (int i = 0; i < states[7].traceIndex; i++) {
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << i << " ";
+        std::cout << "│ " << traceLineFormat(states[7].traceLineData[i], true) << "\n";
+    }
+
+    int8u_t* ppu_data = &states[7].memory.array[PPU_OFFSET + 0x2000];
+
+    std::cout << std::endl;
+
+    for (int i = 0; i < 1024; i++) {
+        printf(" 0x%02X", ppu_data[i]);
+
+        if ((i + 1) % 16 == 0) {
+            printf("\n");
+        }
+    }
+
+    printf("\n");
+
+    #endif
+
+    /* */
+
+    cudaFree(states);
+
+    return 0;
+}
+
+int main(void)
+{
+    return software();
 }

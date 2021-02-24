@@ -48,9 +48,9 @@ struct Region_Wire {
         int16u_t address_H_indirect = state->memory[address_H];
         int16u_t address_HL_indirect = (address_H_indirect << 8) | address_L_indirect;
 
-        flag_t any_dereference = value1_from_zeropage_dereference | value1_from_absolute_dereference |
-                                 value1_from_zeropage_x_dereference | value1_from_absolute_x_dereference | value1_from_indirect_x_dereference |
-                                 value1_from_zeropage_y_dereference | value1_from_absolute_y_dereference | value1_from_indirect_y_dereference;
+        flag16_t any_dereference = value1_from_zeropage_dereference | value1_from_absolute_dereference |
+                                   value1_from_zeropage_x_dereference | value1_from_absolute_x_dereference | value1_from_indirect_x_dereference |
+                                   value1_from_zeropage_y_dereference | value1_from_absolute_y_dereference | value1_from_indirect_y_dereference;
 
         int16u_t address_dereference = (NULL_ADDRESS_READ)&(~any_dereference) | (computation_state->data1)&value1_from_zeropage_dereference |
                                                                                 (address_absolute)&value1_from_absolute_dereference |
@@ -62,7 +62,8 @@ struct Region_Wire {
                                                                                 (0x00FF&(computation_state->data1 + state->Y))&value1_from_zeropage_y_dereference;
 
         computation_state->value1 = ((computation_state->data1)&value1_from_data1 |
-                                     (state->memory[address_dereference])&any_dereference |
+                                     // (state->memory[address_dereference])&any_dereference |
+                                     (state->memory.read(address_dereference, computation_state))&any_dereference |
                                      (state->stack_offset)&value1_from_stack_offset |
                                      (state->A)&value1_from_A |
                                      (state->X)&value1_from_X |
@@ -301,8 +302,9 @@ struct Region_Branch {
 
         computation_state->cycle += condition;
         computation_state->horizontal_scan += 3*condition;
-        computation_state->vertical_scan += computation_state->horizontal_scan >= 341;
+        computation_state->vertical_scan += (computation_state->horizontal_scan >= 341);
         computation_state->horizontal_scan %= 341;
+        computation_state->vertical_scan = (computation_state->vertical_scan == 261) ? -1 : computation_state->vertical_scan;
     }
 };
 
@@ -312,7 +314,13 @@ struct Region_Write {
     __device__
     void transition(SystemState* state, ComputationState* computation_state) const {
         int16u_t address = (NULL_ADDRESS_WRITE)&(~memory_write_value1) | (computation_state->address)&memory_write_value1;
-        state->memory[address] = computation_state->value1;
+        // state->memory[address] = computation_state->value1;
+        state->memory.write(address, computation_state->value1, computation_state);
+
+        if (threadIdx.x == 7 && (((0x2000 <= address) && (address <= (0x2000+8))) || address == 0x4014)) {
+            int16u_t ppu_address = ((computation_state->ppu_address_H << 8) | computation_state->ppu_address_L);
+            printf("memory[%04X]=%02X %04X\n", address, computation_state->value1, ppu_address);
+        }
     }
 };
 
@@ -399,6 +407,33 @@ struct Region_ProgramCounter {
     __device__
     void transition(SystemState* state, ComputationState* computation_state) const {
         state->program_counter += PC_increment;
+    }
+};
+
+struct Region_ComputationStateLoad {
+    __device__
+    static void transition(SystemState* state, ComputationState* computation_state) {
+        computation_state->ppu_status = state->memory[PPU_STATUS];
+    }
+};
+
+struct Region_ComputationStateStore {
+    __device__
+    void transition(SystemState* state, ComputationState* computation_state) const {
+        state->memory[PPU_STATUS] = computation_state->ppu_status;
+    }
+};
+
+struct Region_VerticalBlank {
+    __device__
+    void transition(SystemState* state, ComputationState* computation_state) const {
+        bool blank_condition = !(computation_state->has_blanked) &&
+                                (computation_state->vertical_scan >= 241) &&
+                                (computation_state->horizontal_scan >= 2);
+
+        state->memory[PPU_STATUS] |= blank_condition ? 0x80 : 0x00;
+        computation_state->has_blanked = computation_state->has_blanked || blank_condition;
+        computation_state->has_blanked = computation_state->has_blanked && (computation_state->vertical_scan > 0);
     }
 };
 

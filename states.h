@@ -9,8 +9,8 @@ struct Trace {
     int8u_t Y;
     int8u_t status_register;
     int8u_t stack_offset;
-    int16u_t vertical_scan;
-    int16u_t horizontal_scan;
+    int16_t vertical_scan;
+    int16_t horizontal_scan;
     int16u_t cycle;
 };
 
@@ -24,17 +24,70 @@ struct ComputationState {
 
     int16u_t address;
 
-    int16u_t vertical_scan = 0;
-    int16u_t horizontal_scan = 21;
+    int16_t vertical_scan = 0;
+    int16_t horizontal_scan = 21;
     int16u_t cycle = 7;
+
+    int8u_t ppu_status = 0;
+    int8u_t ppu_address_H;
+    int8u_t ppu_address_L;
+    bool ppu_address_latch = false;
+
+    bool has_blanked = false;
 };
+
+#define PPU_STATUS 0x2002
+#define PPU_ADDRESS 0x2006
+#define PPU_DATA 0x2007
+#define PPU_OFFSET 0x4000
 
 struct Memory {
     int8u_t array[0x10000 + NULL_ADDRESS_MARGIN] = {};
 
     __device__
+    int8u_t read(int index, ComputationState* computation_state) {
+        int16u_t address =                   (index % 0x800)*(0x0000 <= index && index < 0x2000) |
+                           (0x2000 + ((index - 0x2000) % 8))*(0x2000 <= index && index < 0x4000) |
+                                                     (index)*(0x8000 <= index /*&& index < 0xFFFF*/);
+
+        int8u_t value = array[address];
+
+        array[address] &= (address == PPU_STATUS) ? 0b01111111 : 0xFF;
+        computation_state->ppu_address_latch = (address == PPU_STATUS) ? false : computation_state->ppu_address_latch;
+
+        return value;
+    }
+
+    __device__
+    void write(int index, int8u_t value, ComputationState* computation_state) {
+        int16u_t address =                   (index % 0x800)*(0x0000 <= index && index < 0x2000) |
+                           (0x2000 + ((index - 0x2000) % 8))*(0x2000 <= index && index < 0x4000) |
+                                                     (index)*(0x8000 <= index /*&& index < 0xFFFF*/);
+
+        computation_state->ppu_address_H = (address == PPU_ADDRESS && computation_state->ppu_address_latch == false) ? value : computation_state->ppu_address_H;
+        computation_state->ppu_address_L = (address == PPU_ADDRESS && computation_state->ppu_address_latch == true) ? value : computation_state->ppu_address_L;
+        computation_state->ppu_address_latch = (address == PPU_ADDRESS) ? !(computation_state->ppu_address_latch) : computation_state->ppu_address_latch;
+
+        /* map to PPU RAM if necessary */
+
+        bool is_ppu_data_write = (address == PPU_DATA);
+        int16u_t ppu_address = ((computation_state->ppu_address_H << 8) | computation_state->ppu_address_L);
+
+        address = is_ppu_data_write ? PPU_OFFSET + ppu_address : address;
+        array[address] = value;
+
+        ppu_address += is_ppu_data_write;
+        computation_state->ppu_address_H = ppu_address >> 8;
+        computation_state->ppu_address_L = 0xFF & ppu_address;
+    }
+
+    __device__
     int8u_t& operator[](int index) {
-        return array[index % 0x10000];
+        index =                   (index % 0x800)*(0x0000 <= index && index < 0x2000) |
+                (0x2000 + ((index - 0x2000) % 8))*(0x2000 <= index && index < 0x4000) |
+                                          (index)*(0x8000 <= index /*&& index < 0xFFFF*/);
+
+        return array[index];
     }
 };
 
@@ -59,13 +112,19 @@ struct SystemState {
     ComputationState computation_state;
 
     #ifdef DEBUG
-    Trace traceLineData[0x5000];
+    Trace traceLineData[100000];
     int traceIndex = 0;
     #endif
 
     SystemState(std::vector<char>& program, int16u_t program_counter, int load_point) {
         std::copy(program.begin(), program.end(), &memory.array[load_point]);
         this->program_counter = program_counter;
+        this->stack_offset = 0xFD;
+    }
+
+    SystemState(std::vector<char>& program) {
+        std::copy(program.begin(), program.end(), &memory.array[0x8000]);
+        this->program_counter = (memory.array[0xFFFD] << 8) | memory.array[0xFFFC];
         this->stack_offset = 0xFD;
     }
 
@@ -97,11 +156,16 @@ struct SystemState {
         #endif
     }
 
+    int count = 0;
     __device__
     void next() {
         int8u_t* opcodes = &memory.array[program_counter];
 
-        traceWrite(program_counter, opcodes);
+        if (count >= 0) {
+            traceWrite(program_counter, opcodes);
+        }
+
+        count++;
 
         computation_state.data1 = 0xFF & opcodes[1];
         computation_state.data2 = 0xFF & opcodes[2];
@@ -141,7 +205,7 @@ struct OperationInformation {
         } else if (format_type == "Implied") {
             strcpy(cs, "");
         } else if (format_type == "Address_Relative") {
-            sprintf(cs, "$%04X ", program_counter + 2 + (0xFF & byte1));
+            sprintf(cs, "$%04X ", program_counter + 2 + (int8_t)byte1);
         } else {
             return format_type;
         }

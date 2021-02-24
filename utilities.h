@@ -1,5 +1,5 @@
 
-std::string traceLineFormat(Trace trace)
+std::string traceLineFormat(Trace trace, bool aligned = false)
 {
     uint8_t opcode = unsigned((uint8_t)trace.opcode);
     OperationInformation info = operation_info[opcode];
@@ -16,19 +16,23 @@ std::string traceLineFormat(Trace trace)
     if (info.byte_count > 1) {
         sprintf(str[1], " %02X",
             unsigned((uint8_t)trace.byte1));
+    } else if (aligned) {
+        strcpy(str[1], "   ");
     }
 
     if (info.byte_count > 2) {
         sprintf(str[2], " %02X",
             unsigned((uint8_t)trace.byte2));
+    } else if (aligned) {
+        strcpy(str[2], "   ");
     }
 
     if (info.byte_count < 1 | info.byte_count > 3) {
         strcpy(str[2], " --");
     }
 
-    sprintf(str[3], " %s %s", info.name.data(),
-            info.doFormat(trace.byte1, trace.byte2, trace.program_counter).data());
+    sprintf(str[3], " %s %s%s", info.name.data(),
+            info.doFormat(trace.byte1, trace.byte2, trace.program_counter).data(), aligned ? "\t" : "");
 
     sprintf(str[4], "A:%02X X:%02X Y:%02X",
             unsigned((uint8_t)trace.A),
@@ -38,8 +42,8 @@ std::string traceLineFormat(Trace trace)
     sprintf(str[5], " P:%02X SP:%02X PPU:[%d,%d] CYC:%d",
             unsigned((uint8_t)trace.status_register),
             unsigned((uint8_t)trace.stack_offset),
-            unsigned((uint16_t)trace.vertical_scan),
-            unsigned((uint16_t)trace.horizontal_scan),
+            unsigned((int16_t)trace.vertical_scan),
+            unsigned((int16_t)trace.horizontal_scan),
             unsigned((uint16_t)trace.cycle));
 
     using namespace std;
@@ -113,6 +117,38 @@ std::vector<char> fileRead(std::string file_name)
     file.close();
 
     return file_data;
+}
+
+std::pair<std::vector<char>, std::vector<char>> romFileRead(std::string file_name)
+{
+    std::ifstream file(file_name, std::ios::binary);
+
+    file.seekg(0, std::ios::end);
+    std::streampos fileSize = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    std::vector<char> file_data(fileSize);
+    file.read((char*) &file_data[0], fileSize);
+    file.close();
+
+    struct ROM {
+        char _nes[3];
+        char _0x1A;
+        char PRG;
+        char CHR;
+        char _mapper1;
+        char _unused2[9];
+    } rom;
+
+    memcpy((char*)&rom, file_data.data(), sizeof(ROM));
+
+    std::vector<char> program_data(file_data.begin() + sizeof(ROM),
+                                   file_data.begin() + sizeof(ROM) + rom.PRG*8*2048);
+
+    std::vector<char> character_data(file_data.begin() + sizeof(ROM) + rom.PRG*8*2048,
+                                     file_data.begin() + sizeof(ROM) + rom.PRG*8*2048 + rom.CHR*8*1024);
+
+    return {program_data, character_data};
 }
 
 std::vector<std::vector<std::string>> logRead(std::string file_name)

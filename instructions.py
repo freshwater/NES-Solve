@@ -499,10 +499,8 @@ def STA() -> [(0x81, indirect_x_address, Region_Wire(value1_from_A=1, address_fr
               (0x95, zeropage_x_address, Region_Wire(value1_from_A=1, address_from_zeropage_x=1)),
               (0x99, absolute_y_address, Region_Wire(value1_from_A=1, address_from_absolute_y=1, cycle_base_increment=5)),
               (0x9D, absolute_x_address, Region_Wire(value1_from_A=1, address_from_absolute_x=1, cycle_base_increment=5))]:
-                      #todo
     # state.memory[a] = state.A
     return RegionComposition(
-        # rewire=Region_Rewire(value1_from_A=1),
         write=Region_Write(memory_write_value1=1))
 
 def STX() -> [(0x86, zeropage_address, Region_Wire(address_from_zeropage=1, value1_from_X=1)),
@@ -531,31 +529,23 @@ def TYA() -> [(0x98, implied, Region_Wire(value1_from_Y=1))]:
     return RegionComposition(
         # rewire=Region_Rewire(A_from_Y=1, value1_from_Y=1),
         rewire=Region_Rewire(A_from_value1=1),
-        #t
-        # flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
-        #                    Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1))
-        )
+        flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
+                           Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1))
 
 def TAX() -> [(0xAA, implied, Region_Wire(value1_from_A=1))]:
     # state.X = state.A; Z_set(state, state.X); N_set(state, state.X)
     return RegionComposition(
         # rewire=Region_Rewire(X_from_A=1, value1_from_A=1),
         rewire=Region_Rewire(X_from_value1=1),
-        #t
-        # flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
-        #                    Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1)
-                           )
+        flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
+                           Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1))
 
 def TAY() -> [(0xA8, implied, Region_Wire(value1_from_A=1))]:
     # state.Y = state.A; Z_set(state, state.Y); N_set(state, state.Y)
     return RegionComposition(
-        rewire=Region_Rewire(Y_from_value1=1))
-    #t
-    # return RegionComposition(
-    #     rewire=Region_Rewire(Y_from_A=1, value1_from_A=1))
-    #     #t
-    #     # flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
-    #     #                    Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1))
+        rewire=Region_Rewire(Y_from_value1=1),
+        flags=Region_Flags(N_keep=0, N_adjust=0, N_adjust_source=Wire.VALUE1,
+                           Z_keep=0, Z_adjust=0, Z_adjust_source=Wire.VALUE1))
 
 def TSX() -> [(0xBA, implied, Region_Wire(value1_from_stack_offset=1))]:
     # state.X = state.stack_offset; Z_set(state, state.X); N_set(state, state.X)

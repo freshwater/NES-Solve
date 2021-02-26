@@ -752,12 +752,25 @@ def RRA() -> [(0x63, indirect_x_address)]:
 
 #-
 
+def DMA_read1() -> [(0xAB, implied, Region_Wire(value1_from_absolute_dereference=1, cycle_base_increment=1))]:
+    return RegionComposition(
+        implementation_state=Region_ImplementationState(store_write_from_value1=1))
+
+def DMA_write1() -> [(0xB2, implied, Region_Wire(address_from_absolute=1, cycle_base_increment=1))]:
+    return RegionComposition(
+        implementation_state=Region_ImplementationState(value1_read_from_store=1),
+        write=Region_Write(memory_write_value1=1))
+
+#-
+
 def account() -> [(0x02, implied), (0x12, implied), (0x22, implied), (0x32, implied), (0x42, implied),
                   (0x52, implied), (0x62, implied), (0x67, implied), (0x6F, implied), (0x72, implied),
                   (0x73, implied), (0x77, implied), (0x7B, implied), (0x82, implied), (0x0B, implied),
                   (0x2B, implied), (0x4B, implied), (0x6B, implied), (0x7F, implied), (0x89, implied),
                   (0x8B, implied), (0x92, implied), (0x93, implied), (0x9B, implied), (0x9C, implied),
-                  (0x9E, implied), (0x9F, implied), (0xAB, implied), (0xB2, implied), (0xBB, implied),
+                  (0x9E, implied), (0x9F, implied),
+                  # (0xAB, implied), (0xB2, implied),
+                  (0xBB, implied),
                   (0xC2, implied), (0xD2, implied), (0xCB, implied), (0xE2, implied), (0xF2, implied)]:
     # assert None, None
     return RegionComposition()
@@ -854,7 +867,8 @@ if __name__ == '__main__':
                       0x39, 0x59, 0x79, 0xD9, 0xF9, 0x99, 0xB4, 0x94, 0x15, 0x35, 0x55,
                       0x75, 0xD5, 0xF5, 0xB5, 0x95, 0x56, 0x16, 0x76, 0x36, 0xF6, 0xD6,
                       0xB6, 0x96, 0xBC, 0x1D, 0x3D, 0x5D, 0x7D, 0xDD, 0xFD, 0xBD, 0x9D,
-                      0x5E, 0x1E, 0x7E, 0x3E, 0xFE, 0xDE, 0xBE]:
+                      0x5E, 0x1E, 0x7E, 0x3E, 0xFE, 0xDE, 0xBE,
+                      0xAB, 0xB2]:
             operation, byte_count, addressing, wire = instructions[opcode]
             region = operation()
             wire = wire or addressing()

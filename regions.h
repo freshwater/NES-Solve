@@ -83,8 +83,7 @@ struct Region_Wire {
                             ((0xFF00&(address_HL_indirect + state->Y)) != (0xFF00&(address_HL_indirect)))&value1_from_indirect_y_dereference |
                             ((0xFF00&(address_absolute    + state->Y)) != (0xFF00&(   address_absolute)))&value1_from_absolute_y_dereference;
 
-        computation_state->cycle += cycle_base_increment + extra_cycle;
-        computation_state->horizontal_scan += 3*(cycle_base_increment + extra_cycle);
+        computation_state->instruction_countdown += cycle_base_increment + extra_cycle;
     }
 };
 
@@ -300,11 +299,7 @@ struct Region_Branch {
 
         state->program_counter = state->program_counter + ((int8_t)(computation_state->value1))*condition;
 
-        computation_state->cycle += condition;
-        computation_state->horizontal_scan += 3*condition;
-        computation_state->vertical_scan += (computation_state->horizontal_scan >= 341);
-        computation_state->horizontal_scan %= 341;
-        computation_state->vertical_scan = (computation_state->vertical_scan == 261) ? -1 : computation_state->vertical_scan;
+        computation_state->instruction_countdown += condition;
     }
 };
 
@@ -337,21 +332,32 @@ struct Region_StackWrite {
     }
 };
 
+struct Region_ImplementationState {
+    flag_t store_write_from_value1 = 0;
+    flag_t value1_read_from_store = 0;
+
+    __device__
+    void transition(SystemState* state, ComputationState* computation_state) const {
+        computation_state->store = (computation_state->store)&(~store_write_from_value1) | (computation_state->value1)&store_write_from_value1;
+        computation_state->value1 = (computation_state->value1)&(~value1_read_from_store) | (computation_state->store)&value1_read_from_store;
+    }
+};
+
 struct Region_Flags {
-    flag_t N_keep = 0;
+    flag_t N_keep = 0xFF;
     int_t  N_adjust = 0;
     int_t  N_adjust_source = 0;
-    flag_t O_keep = 0;
+    flag_t O_keep = 0xFF;
     int_t  O_adjust = 0;
     int_t  O_adjust_direct = 0;
-    flag_t D_keep = 0;
+    flag_t D_keep = 0xFF;
     int_t  D_adjust = 0;
-    flag_t I_keep = 0;
+    flag_t I_keep = 0xFF;
     int_t  I_adjust = 0;
-    flag_t Z_keep = 0;
+    flag_t Z_keep = 0xFF;
     int_t  Z_adjust = 0;
     int_t  Z_adjust_source = 0;
-    flag_t C_keep = 0;
+    flag_t C_keep = 0xFF;
     int_t  C_adjust = 0;
     int_t  C_adjust_direct = 0;
     flag_t set_byte_from_value1 = 0;
@@ -448,6 +454,7 @@ struct RegionComposition {
     const Region_JSR_RTS_RTI jsr_rts_rti;
     const Region_Branch branch;
     const Region_Rewire rewire;
+    const Region_ImplementationState implementation_state;
     const Region_Flags flags;
     const Region_Write write;
     const Region_StackWrite stack_write;
@@ -475,6 +482,7 @@ struct RegionComposition {
         jsr_rts_rti.transition(state, computation_state);
         branch.transition(state, computation_state);
         rewire.transition(state, computation_state);
+        implementation_state.transition(state, computation_state);
         flags.transition(state, computation_state);
         write.transition(state, computation_state);
         stack_write.transition(state, computation_state);

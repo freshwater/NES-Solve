@@ -541,6 +541,17 @@ class Region_Rewire(Region):
                 'program_counter_from_address',
                 'stack_offset_from_X']
 
+class Region_ImplementationState(Region):
+    def __init__(self, store_write_from_value1: flag = 0,
+                       value1_read_from_store: flag = 0):
+        self.store_write_from_value1 = store_write_from_value1
+        self.value1_read_from_store = value1_read_from_store
+
+    def args_OK(self):
+        return ['store_write_from_value1',
+                'value1_read_from_store']
+
+
 class Region_Flags(Region):
     def __init__(self, N_keep: flag = 1, N_adjust: unsigned_int = 0, N_adjust_source: unsigned_int = Wire.NULL,
                        O_keep: flag = 1, O_adjust: unsigned_int = 0, O_adjust_direct: unsigned_int = Wire.NULL,
@@ -651,6 +662,7 @@ class RegionComposition:
                        rewire=Region_Rewire(),
                        branch=Region_Branch(),
                        stack_write=Region_StackWrite(),
+                       implementation_state=Region_ImplementationState(),
                        flags=Region_Flags(),
                        write=Region_Write()):
 
@@ -665,6 +677,7 @@ class RegionComposition:
             ("jsr_rts_rti", jsr_rts_rti, Region_JSR_RTS_RTI),
             ("branch", branch, Region_Branch),
             ("rewire", rewire, Region_Rewire),
+            ("implementation_state", implementation_state, Region_ImplementationState),
             ("flags", flags, Region_Flags),
             ("write", write, Region_Write),
             ("stack_write", stack_write, Region_StackWrite),
@@ -688,6 +701,7 @@ class RegionComposition:
             "branch",
             "write",
             "stack_write",
+            "implementation_state",
             "flags",
             "program_counter",
             "compare",

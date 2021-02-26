@@ -34,7 +34,6 @@ void operationTransition(uint8_t, SystemState*, ComputationState*);
 
 __device__
 void operationTransition(uint8_t opcode, SystemState* state, ComputationState* computation_state) {
-    Region_VerticalBlank().transition(state, computation_state);
     instructions[opcode].transition(state, computation_state);
 }
 
@@ -192,12 +191,29 @@ int software(void)
         std::cout << "│ " << traceLineFormat(states[7].traceLineData[i], true) << "\n";
     }
 
+    std::cout << std::endl;
+
     int8u_t* ppu_data = &states[7].memory.array[PPU_OFFSET + 0x2000];
 
-    std::cout << std::endl;
+    printf("0x2000\n");
 
     for (int i = 0; i < 1024; i++) {
         printf(" 0x%02X", ppu_data[i]);
+
+        if ((i + 1) % 16 == 0) {
+            printf("\n");
+        }
+    }
+
+    printf("\n");
+    printf("\n");
+
+    int8u_t* ppu_data2 = &states[7].memory.array[PPU_OAM_OFFSET];
+
+    printf("0x%04X\n", PPU_OAM_OFFSET);
+
+    for (int i = 0; i < 256; i++) {
+        printf(" 0x%02X", ppu_data2[i]);
 
         if ((i + 1) % 16 == 0) {
             printf("\n");
@@ -217,5 +233,6 @@ int software(void)
 
 int main(void)
 {
+    // return tests();
     return software();
 }

@@ -29,7 +29,6 @@ struct ComputationState {
     int16_t vertical_scan = 0;
     int16_t horizontal_scan = 21 - 3;
     int16u_t ppu_cycle = 21 - 3;
-    int16u_t cycle = 7;
     int16u_t instruction_countdown = 1;
 
     int8u_t ppu_status = 0;
@@ -41,15 +40,10 @@ struct ComputationState {
     int8u_t dma_count = 0;
     int8u_t dma_source_H;
     int8u_t dma_source_L;
-    int8u_t dma_target_H;
-    int8u_t dma_target_L;
 
     bool has_blanked = false;
     bool has_vblank_nmi = false;
 };
-
-#define PPU_OFFSET      0x4000
-#define PPU_OAM_OFFSET  (0x8000 - 256)
 
 #define PPU_CTRL1       0x2000
 #define PPU_CTRL2       0x2000
@@ -64,65 +58,95 @@ struct ComputationState {
 #define DMA_read1       0xAB
 #define DMA_write1      0xB2
 
+#define CPU_MEMORY       0x0000
+#define PPU_REGISTERS    (CPU_MEMORY + 0x800)
+#define PPU_MEMORY       (PPU_REGISTERS + 8)
+#define CARTRIDGE_MEMORY (PPU_MEMORY + 0x4000)
+#define PPU_OAM_REGISTER (CARTRIDGE_MEMORY + 0x8000)
+#define PPU_OAM_MEMORY   (PPU_OAM_REGISTER + 1)
+
 struct Memory {
-    int8u_t array[0x10000 + NULL_ADDRESS_MARGIN] = {};
+    int8u_t array[0] = {};
+    int8u_t cpu_memory[0x800] = {};
+    int8u_t ppu_registers[8] = {};
+    int8u_t ppu_memory[0x4000] = {};
+    int8u_t cartridge_memory[0x8000] = {};
+    int8u_t ppu_OAM_register[1] = {};
+    int8u_t ppu_OAM_memory[0x100] = {};
+    int8u_t null_address_read[2] = {};
+    int8u_t null_address_write[2] = {};
+
+    __device__
+    int map_offset(int index) {
+        return        (CPU_MEMORY)*(0x0000 <= index && index < 0x2000) +
+                   (PPU_REGISTERS)*(0x2000 <= index && index < 0x4000) +
+                               (0)*(0x4000 <= index && index < 0x4014) +
+                (PPU_OAM_REGISTER)*(0x4014 == index) +
+                               (0)*(0x4014  < index && index < 0x8000) +
+                (CARTRIDGE_MEMORY)*(0x8000 <= index /*&& index < 0x10000*/);
+    }
+
+    __device__
+    int map_index(int offset, int index) {
+        return        (index % 0x800)*(CPU_MEMORY       == offset) +
+               ((index - 0x2000) % 8)*(PPU_REGISTERS    == offset) +
+                                  (0)*(PPU_OAM_REGISTER == offset) +
+                     (index - 0x8000)*(CARTRIDGE_MEMORY == offset);
+    }
 
     __device__
     int8u_t read(int index, ComputationState* computation_state) {
-        int16u_t address =                   (index % 0x800)*(0x0000 <= index && index < 0x2000) |
-                           (0x2000 + ((index - 0x2000) % 8))*(0x2000 <= index && index < 0x4000) |
-                                                     (index)*(0x4000 <= index && index < 0x8000) |
-                                                     (index)*(0x8000 <= index /*&& index < 0xFFFF*/);
+        int offset = map_offset(index);
+        index = map_index(offset, index);
 
-        int8u_t value = array[address];
+        int8u_t value = array[offset + index];
 
-        array[address] &= (address == PPU_STATUS) ? 0b01111111 : 0xFF;
-        computation_state->ppu_address_latch = (address == PPU_STATUS) ? false : computation_state->ppu_address_latch;
+        bool is_ppu_status = (offset == PPU_REGISTERS) && (index == 0x02);
+        array[offset + index] &= is_ppu_status ? 0b01111111 : 0xFF;
+        computation_state->ppu_address_latch = is_ppu_status ? false : computation_state->ppu_address_latch;
 
         return value;
     }
 
     __device__
-    void write(int index, int8u_t value, ComputationState* computation_state) {
-        int16u_t address =                   (index % 0x800)*(0x0000 <= index && index < 0x2000) |
-                           (0x2000 + ((index - 0x2000) % 8))*(0x2000 <= index && index < 0x4000) |
-                                                     (index)*(0x4000 <= index && index < 0x8000) |
-                                                     (index)*(0x8000 <= index /*&& index < 0xFFFF*/);
+    void write(int index0, int8u_t value, bool is_oam_dma_write, ComputationState* computation_state) {
+        int offset = map_offset(index0);
+        int index = map_index(offset, index0);
 
-        computation_state->ppu_address_H = (address == PPU_ADDRESS && computation_state->ppu_address_latch == false) ? value : computation_state->ppu_address_H;
-        computation_state->ppu_address_L = (address == PPU_ADDRESS && computation_state->ppu_address_latch == true) ? value : computation_state->ppu_address_L;
-        computation_state->ppu_address_latch = (address == PPU_ADDRESS) ? !(computation_state->ppu_address_latch) : computation_state->ppu_address_latch;
+        bool is_ppu_address = (offset == PPU_REGISTERS) && (index == 0x06);
+        computation_state->ppu_address_H = (is_ppu_address && computation_state->ppu_address_latch == false) ? value : computation_state->ppu_address_H;
+        computation_state->ppu_address_L = (is_ppu_address && computation_state->ppu_address_latch == true) ? value : computation_state->ppu_address_L;
+        computation_state->ppu_address_latch = is_ppu_address ? !(computation_state->ppu_address_latch) : computation_state->ppu_address_latch;
 
-        /* map to PPU RAM if necessary */
+        // /* map to PPU RAM if necessary */
 
-        bool is_ppu_data_write = (address == PPU_DATA);
+        bool is_ppu_data_write = (offset == PPU_REGISTERS) && (index == 0x07);
         int16u_t ppu_address = ((computation_state->ppu_address_H << 8) | computation_state->ppu_address_L);
 
-        address = is_ppu_data_write ? PPU_OFFSET + ppu_address : address;
+        int address = is_ppu_data_write ? PPU_MEMORY + ppu_address : offset + index;
+        address = is_oam_dma_write ? PPU_OAM_MEMORY + index0 : address;
         array[address] = value;
 
         ppu_address += is_ppu_data_write;
         computation_state->ppu_address_H = ppu_address >> 8;
         computation_state->ppu_address_L = 0xFF & ppu_address;
 
-        bool is_DMA_write = (address == PPU_OAM_DMA);
-        computation_state->is_dma_active |= is_DMA_write;
-        computation_state->dma_source_H = (computation_state->dma_source_H)*(!is_DMA_write) + (value)*is_DMA_write;
-        computation_state->dma_source_L = (computation_state->dma_source_L)*(!is_DMA_write) + (0)*is_DMA_write;
+        bool is_DMA_register_write = (offset == PPU_OAM_REGISTER) && (index == 0x00);
+        computation_state->is_dma_active |= is_DMA_register_write;
+        computation_state->dma_source_H = (computation_state->dma_source_H)*(!is_DMA_register_write) + (value)*is_DMA_register_write;
+        computation_state->dma_source_L = (computation_state->dma_source_L)*(!is_DMA_register_write) + (0)*is_DMA_register_write;
 
-        bool is_OAM_address_write = (address == PPU_OAM_ADDRESS);
-        computation_state->dma_target_H = (computation_state->dma_target_H)*(!is_OAM_address_write) + (PPU_OAM_OFFSET >> 8)*is_OAM_address_write;
-        computation_state->dma_target_L = (computation_state->dma_target_L)*(!is_OAM_address_write) + ((PPU_OAM_OFFSET & 0xFF) + value)*is_OAM_address_write;
+        // bool is_OAM_address_write = (offset == PPU_REGISTERS) && (index == 0x03);
+        // computation_state->dma_target_H = (computation_state->dma_target_H)*(!is_OAM_address_write) + (PPU_OAM_OFFSET >> 8)*is_OAM_address_write;
+        // computation_state->dma_target_L = (computation_state->dma_target_L)*(!is_OAM_address_write) + ((PPU_OAM_OFFSET & 0xFF) + value)*is_OAM_address_write;
     }
 
     __device__
     int8u_t& operator[](int index) {
-        index =                   (index % 0x800)*(0x0000 <= index && index < 0x2000) |
-                (0x2000 + ((index - 0x2000) % 8))*(0x2000 <= index && index < 0x4000) |
-                                          (index)*(0x4000 <= index && index < 0x8000) |
-                                          (index)*(0x8000 <= index /*&& index < 0xFFFF*/);
+        int offset = map_offset(index);
+        index = map_index(offset, index);
 
-        return array[index];
+        return array[offset + index];
     }
 };
 
@@ -152,14 +176,15 @@ struct SystemState {
     #endif
 
     SystemState(std::vector<char>& program, int16u_t program_counter, int load_point) {
-        std::copy(program.begin(), program.end(), &memory.array[load_point]);
+        std::copy(program.begin(), program.end(), memory.cartridge_memory);
+        std::copy(program.begin(), program.end(), (memory.cartridge_memory + 0x4000));
         this->program_counter = program_counter;
         this->stack_offset = 0xFD;
     }
 
     SystemState(std::vector<char>& program) {
-        std::copy(program.begin(), program.end(), &memory.array[0x8000]);
-        this->program_counter = (memory.array[0xFFFD] << 8) | memory.array[0xFFFC];
+        std::copy(program.begin(), program.end(), memory.cartridge_memory);
+        this->program_counter = (memory.cartridge_memory[0xFFFD % 0x8000] << 8) | memory.cartridge_memory[0xFFFC % 0x8000];
         this->stack_offset = 0xFD;
     }
 
@@ -208,9 +233,12 @@ struct SystemState {
         computation_state->has_vblank_nmi = computation_state->has_vblank_nmi && (computation_state->vertical_scan > 0);
     }
 
+    int stack_pointer = 0;
+    int count = 0;
+
     __device__
     void next() {
-        int8u_t* opcodes = &memory.array[program_counter];
+        int8u_t* opcodes = &memory[program_counter];
 
         computation_state.ppu_cycle++;
         scanLineNext(this, &computation_state);
@@ -224,7 +252,7 @@ struct SystemState {
 
         computation_state.instruction_countdown -= (!computation_state.is_dma_active);
         bool instruction_OK = computation_state.instruction_countdown == 0;
-        int8u_t opcode = (0x64)*(!instruction_OK) + (opcodes[0])*instruction_OK;
+        int8u_t opcode = (0x6B)*(!instruction_OK) + (opcodes[0])*instruction_OK;
 
         bool nmi_condition = instruction_OK &&
                              (!computation_state.has_vblank_nmi) &&
@@ -236,7 +264,7 @@ struct SystemState {
         int8u_t nmi_L = memory[0xFFFA];
         int8u_t nmi_H = memory[0xFFFB];
 
-        opcode = (opcode)*(!nmi_condition) + (0x20)*(nmi_condition);
+        opcode = (opcode)*(!nmi_condition) + (0xC2)*(nmi_condition);
         computation_state.data1 = (computation_state.data1)*(!nmi_condition) + (nmi_L)*nmi_condition;
         computation_state.data2 = (computation_state.data2)*(!nmi_condition) + (nmi_H)*nmi_condition;
 
@@ -247,16 +275,17 @@ struct SystemState {
 
         computation_state.data1 = (computation_state.data1)*(!odd_cycle) + (computation_state.dma_source_L + computation_state.dma_count)*odd_cycle;
         computation_state.data2 = (computation_state.data2)*(!odd_cycle) + (computation_state.dma_source_H)*odd_cycle;
-        computation_state.data1 = (computation_state.data1)*(!even_cycle) + (computation_state.dma_target_L + computation_state.dma_count)*even_cycle;
-        computation_state.data2 = (computation_state.data2)*(!even_cycle) + (computation_state.dma_target_H)*even_cycle;
+        computation_state.data1 = (computation_state.data1)*(!even_cycle) + (computation_state.dma_count)*even_cycle;
 
         computation_state.dma_count += even_cycle;
-        // computation_state.is_dma_active = (computation_state.is_dma_active && computation_state.dma_count != 0);
         computation_state.is_dma_active = (computation_state.is_dma_active && !(even_cycle && computation_state.dma_count == 0));
 
-        if (instruction_OK) {
+        if (instruction_OK && 0 < ++count) {
             traceWrite(program_counter, opcodes);
         }
+
+        int16u_t program_counter_previous = program_counter;
+        int8u_t stack_offset_previous = stack_offset;
 
         operationTransition(opcode, this, &computation_state);
     }

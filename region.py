@@ -385,10 +385,14 @@ class Region_ADC_SBC(Region):
 class Region_JSR_RTS_RTI(Region):
     def __init__(self, jsr_OK: flag16 = 0,
                        rts_OK: flag16 = 0,
-                       rti_OK: flag16 = 0):
+                       rti_OK: flag16 = 0,
+                       brk_OK: flag16 = 0,
+                       nmi_OK: flag16 = 0):
         self.jsr_OK = jsr_OK
         self.rts_OK = rts_OK
         self.rti_OK = rti_OK
+        self.brk_OK = brk_OK
+        self.nmi_OK = nmi_OK
 
     def transition(self, state, computation_state):
         program_counter = state.program_counter + (-1)*self.jsr_OK
@@ -430,7 +434,7 @@ class Region_JSR_RTS_RTI(Region):
         state.program_counter = (state.program_counter)*(1-any_) + (new_program_counter)*any_
 
     def args_OK(self):
-        return ['jsr_OK', 'rts_OK', 'rti_OK']
+        return ['jsr_OK', 'rts_OK', 'rti_OK', 'brk_OK', 'nmi_OK']
 
 class Region_Branch(Region):
     def __init__(self, flag_match: unsigned_int =0,
@@ -619,15 +623,18 @@ class Region_Flags(Region):
                 'set_byte_from_value1']
 
 class Region_Write(Region):
-    def __init__(self, memory_write_value1: flag16 = 0):
+    def __init__(self, memory_write_value1: flag16 = 0,
+                       oam_memory_write_value1: flag16 = 0):
         self.memory_write_value1 = memory_write_value1
+        self.oam_memory_write_value1 = oam_memory_write_value1
 
     def transition(self, state, computation_state):
         address = ComputationState.NULL_ADDRESS*(1-self.memory_write_value1) + computation_state.address*self.memory_write_value1
         state.memory[address] = computation_state.value1
 
     def args_OK(self):
-        return ['memory_write_value1']
+        return ['memory_write_value1',
+                'oam_memory_write_value1']
 
 class Region_StackWrite(Region):
     def __init__(self, stack_write_value1: flag16 = 0,

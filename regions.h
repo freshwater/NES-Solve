@@ -219,6 +219,8 @@ struct Region_JSR_RTS_RTI {
     flag16_t jsr_OK = 0;
     flag16_t rts_OK = 0;
     flag16_t rti_OK = 0;
+    flag16_t brk_OK = 0;
+    flag16_t nmi_OK = 0;
 
     __device__
     void transition(SystemState* state, ComputationState* computation_state) const {
@@ -226,31 +228,31 @@ struct Region_JSR_RTS_RTI {
         int8u_t pc_H = program_counter >> 8;
         int8u_t pc_L = program_counter & 0x00FF;
 
-        flag16_t any_rt = rts_OK | rti_OK;
-        int_t pre_offset = (1)&(rts_OK | rti_OK);
-        int_signed_t post_offset = (-1)&jsr_OK;
+        flag16_t any_jump = jsr_OK | brk_OK | nmi_OK;
+        flag16_t any_return = rts_OK | rti_OK;
+
+        int_t pre_offset = (1)&any_return;
+        int_signed_t post_offset = (-1)&any_jump;
 
         state->stack_offset += pre_offset;
 
-        // int16u_t write_address = (NULL_ADDRESS_WRITE)*(1-jsr_OK) + (STACK_ZERO + state->stack_offset)*jsr_OK;
-        int16u_t write_address = (NULL_ADDRESS_WRITE)&(~jsr_OK) | (STACK_ZERO | state->stack_offset)&jsr_OK;
-        int16u_t read_address = (NULL_ADDRESS_READ)&(~any_rt) | (STACK_ZERO | state->stack_offset)&any_rt;
-        state->memory[write_address] = pc_H;
-        pc_L = (pc_L)&(~any_rt) | (state->memory[read_address])&any_rt;
+        int16u_t write_address = (NULL_ADDRESS_WRITE)&(~any_jump) | (STACK_ZERO | state->stack_offset)&any_jump;
+        int16u_t read_address = (NULL_ADDRESS_READ)&(~any_return) | (STACK_ZERO | state->stack_offset)&any_return;
+        /*write*/state->memory[write_address] = pc_H;
+         /*read*/pc_L = (pc_L)&(~any_return) | (state->memory[read_address])&any_return;
 
         state->stack_offset += pre_offset;
         state->stack_offset += post_offset;
 
-        write_address = (NULL_ADDRESS_WRITE)&(~jsr_OK) | (STACK_ZERO | state->stack_offset)&jsr_OK;
-        read_address = (NULL_ADDRESS_READ)&(~any_rt) | (STACK_ZERO | state->stack_offset)&any_rt;
-        state->memory[write_address] = pc_L;
-        pc_H = (pc_H)&(~any_rt) | (state->memory[read_address])&any_rt;
+        write_address = (NULL_ADDRESS_WRITE)&(~any_jump) | (STACK_ZERO | state->stack_offset)&any_jump;
+        read_address = (NULL_ADDRESS_READ)&(~any_return) | (STACK_ZERO | state->stack_offset)&any_return;
+        /*write*/state->memory[write_address] = pc_L;
+         /*read*/pc_H = (pc_H)&(~any_return) | (state->memory[read_address])&any_return;
 
         state->stack_offset += post_offset;
 
-        flag16_t any_ = jsr_OK | rts_OK | rti_OK;
-        int16u_t new_program_counter = (program_counter)&(~any_) | (computation_state->address)&jsr_OK | ((pc_H << 8) | pc_L)&any_rt;
-        // new_program_counter = (program_counter)*(1-jsr_OK) + (computation_state->address)*jsr_OK;
+        flag16_t any_ = jsr_OK | rts_OK | rti_OK | brk_OK | nmi_OK;
+        int16u_t new_program_counter = (program_counter)&(~any_) | (computation_state->address)&any_jump | ((pc_H << 8) | pc_L)&any_return;
         new_program_counter = new_program_counter + ((1)&rts_OK) + ((-1)&rti_OK);
 
         state->program_counter = (state->program_counter)&(~any_) | (new_program_counter)&any_;
@@ -305,17 +307,14 @@ struct Region_Branch {
 
 struct Region_Write {
     flag16_t memory_write_value1 = 0;
+    flag16_t oam_memory_write_value1 = 0;
 
     __device__
     void transition(SystemState* state, ComputationState* computation_state) const {
         int16u_t address = (NULL_ADDRESS_WRITE)&(~memory_write_value1) | (computation_state->address)&memory_write_value1;
-        // state->memory[address] = computation_state->value1;
-        state->memory.write(address, computation_state->value1, computation_state);
+        address = (address)&(~oam_memory_write_value1) | (computation_state->address)&oam_memory_write_value1;
 
-        if (threadIdx.x == 7 && (((0x2000 <= address) && (address <= (0x2000+8))) || address == 0x4014)) {
-            int16u_t ppu_address = ((computation_state->ppu_address_H << 8) | computation_state->ppu_address_L);
-            printf("memory[%04X]=%02X %04X\n", address, computation_state->value1, ppu_address);
-        }
+        state->memory.write(address, computation_state->value1, oam_memory_write_value1, computation_state);
     }
 };
 

@@ -603,30 +603,24 @@ def BVS() -> [(0x70, relative_address)]:
     #     state.program_counter += np.int8(a)
     return RegionComposition(branch=Region_Branch(flag_match=1, O_flag_branch=1))
 
-def BRK() -> [(0x00, implied)]:
-    assert False, True
-    state.status_register['Interrupt'] = 1
-
-    pc_H = state.program_counter >> 8
-    pc_L = state.program_counter & 0x00FF
-    state.memory[STACK_ZERO + state.stack_offset] = pc_H
-    state.stack_offset -= 1
-    state.memory[STACK_ZERO + state.stack_offset] = pc_L
-    state.stack_offset -= 1
-
-    status_register = state.status_register_byte()
-    status_register = Behaviors.write_special_status_bits_on_push(BRK, status_register)
-    state.memory[STACK_ZERO + state.stack_offset] = status_register
+def BRK() -> [(0x00, implied, Region_Wire(address_from_absolute=1, cycle_base_increment=7))]:
+    # assert False, True
+    # state.status_register['Interrupt'] = 1
+    # pc_H = state.program_counter >> 8
+    # pc_L = state.program_counter & 0x00FF
+    # state.memory[STACK_ZERO + state.stack_offset] = pc_H
     # state.stack_offset -= 1
-
-    state.program_counter = state.memory[0xFFFF]*0x0100 + state.memory[0xFFFE]
-
-def NMI():
-    nmi_L = state.memory[0xFFFA]
-    nmi_H = state.memory[0xFFFB]
-    data = nmi_H*0x0100 + nmi_L
-
-    JSR(state, data)
+    # state.memory[STACK_ZERO + state.stack_offset] = pc_L
+    # state.stack_offset -= 1
+    # status_register = state.status_register_byte()
+    # status_register = Behaviors.write_special_status_bits_on_push(BRK, status_register)
+    # state.memory[STACK_ZERO + state.stack_offset] = status_register
+    # # state.stack_offset -= 1
+    # state.program_counter = state.memory[0xFFFF]*0x0100 + state.memory[0xFFFE]
+    return RegionComposition(
+        jsr_rts_rti=Region_JSR_RTS_RTI(brk_OK=1),
+        rewire=Region_Rewire(value1_from_status_push_bits=1),
+        stack_write=Region_StackWrite(stack_write_value1=1, stack_offset_post_adjust=-1))
 
 def JSR() -> [(0x20, absolute_address, Region_Wire(address_from_absolute=1, cycle_base_increment=6))]:
     # Stack is from range 0x0100-0x1FF and grows down from 0x0100 + 0xFD.
@@ -752,26 +746,35 @@ def RRA() -> [(0x63, indirect_x_address)]:
 
 #-
 
+def NOP_() -> [(0x6B, implied, Region_Wire(cycle_base_increment=0))]:
+    return RegionComposition()
+
 def DMA_read1() -> [(0xAB, implied, Region_Wire(value1_from_absolute_dereference=1, cycle_base_increment=1))]:
     return RegionComposition(
         implementation_state=Region_ImplementationState(store_write_from_value1=1))
 
-def DMA_write1() -> [(0xB2, implied, Region_Wire(address_from_absolute=1, cycle_base_increment=1))]:
+def DMA_write1() -> [(0xB2, implied, Region_Wire(address_from_zeropage=1, cycle_base_increment=1))]:
     return RegionComposition(
         implementation_state=Region_ImplementationState(value1_read_from_store=1),
-        write=Region_Write(memory_write_value1=1))
+        write=Region_Write(oam_memory_write_value1=1))
+
+def NMI() -> [(0xC2, implied, Region_Wire(address_from_absolute=1, cycle_base_increment=7))]:
+    return RegionComposition(
+        jsr_rts_rti=Region_JSR_RTS_RTI(nmi_OK=1),
+        rewire=Region_Rewire(value1_from_status_push_bits=1),
+        stack_write=Region_StackWrite(stack_write_value1=1, stack_offset_post_adjust=-1))
 
 #-
 
 def account() -> [(0x02, implied), (0x12, implied), (0x22, implied), (0x32, implied), (0x42, implied),
                   (0x52, implied), (0x62, implied), (0x67, implied), (0x6F, implied), (0x72, implied),
                   (0x73, implied), (0x77, implied), (0x7B, implied), (0x82, implied), (0x0B, implied),
-                  (0x2B, implied), (0x4B, implied), (0x6B, implied), (0x7F, implied), (0x89, implied),
+                  (0x2B, implied), (0x4B, implied), (0x7F, implied), (0x89, implied),
                   (0x8B, implied), (0x92, implied), (0x93, implied), (0x9B, implied), (0x9C, implied),
                   (0x9E, implied), (0x9F, implied),
-                  # (0xAB, implied), (0xB2, implied),
+                  # (0x6B, implied), (0xAB, implied), (0xB2, implied), (0xC2, implied),
                   (0xBB, implied),
-                  (0xC2, implied), (0xD2, implied), (0xCB, implied), (0xE2, implied), (0xF2, implied)]:
+                  (0xD2, implied), (0xCB, implied), (0xE2, implied), (0xF2, implied)]:
     # assert None, None
     return RegionComposition()
 
@@ -867,17 +870,24 @@ if __name__ == '__main__':
                       0x39, 0x59, 0x79, 0xD9, 0xF9, 0x99, 0xB4, 0x94, 0x15, 0x35, 0x55,
                       0x75, 0xD5, 0xF5, 0xB5, 0x95, 0x56, 0x16, 0x76, 0x36, 0xF6, 0xD6,
                       0xB6, 0x96, 0xBC, 0x1D, 0x3D, 0x5D, 0x7D, 0xDD, 0xFD, 0xBD, 0x9D,
-                      0x5E, 0x1E, 0x7E, 0x3E, 0xFE, 0xDE, 0xBE,
-                      0xAB, 0xB2]:
+                      0x5E, 0x1E, 0x7E, 0x3E, 0xFE, 0xDE, 0xBE, 0x00,
+
+                      0x6B, 0xAB, 0xB2, 0xC2]:
+
             operation, byte_count, addressing, wire = instructions[opcode]
             region = operation()
             wire = wire or addressing()
 
-            wire.cycle_base_increment = wire.cycle_base_increment or cycle_base_increments[addressing]
+            if wire.cycle_base_increment == None:
+                wire.cycle_base_increment = cycle_base_increments[addressing]
 
             pc_increment = byte_count
-            if opcode in [0x4C, 0x20, 0x60, 0x6C]:
+            if opcode in [0x4C, 0x20, 0x60, 0x6C, 0x00]:
                 # instructions that directly modify the program counter
+                pc_increment = 0
+
+            if opcode in [0x6B, 0xAB, 0xB2, 0xC2]:
+                # implementation instructions
                 pc_increment = 0
 
             name = operation.__name__

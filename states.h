@@ -26,6 +26,9 @@ struct ComputationState {
 
     int8u_t store;
 
+    int8u_t controller_read_position = 0;
+    int frame_count = 0;
+
     int16_t vertical_scan = 0;
     int16_t horizontal_scan = 21 - 3;
     int16u_t ppu_cycle = 21 - 3;
@@ -58,12 +61,15 @@ struct ComputationState {
 #define DMA_read1       0xAB
 #define DMA_write1      0xB2
 
-#define CPU_MEMORY       0x0000
-#define PPU_REGISTERS    (CPU_MEMORY + 0x800)
-#define PPU_MEMORY       (PPU_REGISTERS + 8)
-#define CARTRIDGE_MEMORY (PPU_MEMORY + 0x4000)
-#define PPU_OAM_REGISTER (CARTRIDGE_MEMORY + 0x8000)
-#define PPU_OAM_MEMORY   (PPU_OAM_REGISTER + 1)
+#define CPU_MEMORY         0x0000
+#define PPU_REGISTERS      (CPU_MEMORY + 0x800)
+#define PPU_MEMORY         (PPU_REGISTERS + 8)
+#define CARTRIDGE_MEMORY   (PPU_MEMORY + 0x4000)
+#define PPU_OAM_REGISTER   (CARTRIDGE_MEMORY + 0x8000)
+#define CONTROL_PORT_1     (PPU_OAM_REGISTER + 1)
+#define PPU_OAM_MEMORY     (CONTROL_PORT_1 + 1)
+#define NULL_ADDRESS_READ  (PPU_OAM_MEMORY + 0x100)
+#define NULL_ADDRESS_WRITE (NULL_ADDRESS_READ + 2)
 
 struct Memory {
     int8u_t array[0] = {};
@@ -72,6 +78,7 @@ struct Memory {
     int8u_t ppu_memory[0x4000] = {};
     int8u_t cartridge_memory[0x8000] = {};
     int8u_t ppu_OAM_register[1] = {};
+    int8u_t control_port1[1] = {};
     int8u_t ppu_OAM_memory[0x100] = {};
     int8u_t null_address_read[2] = {};
     int8u_t null_address_write[2] = {};
@@ -82,6 +89,8 @@ struct Memory {
                    (PPU_REGISTERS)*(0x2000 <= index && index < 0x4000) +
                                (0)*(0x4000 <= index && index < 0x4014) +
                 (PPU_OAM_REGISTER)*(0x4014 == index) +
+                               (0)*(0x4015 == index) +
+                  (CONTROL_PORT_1)*(0x4016 == index) +
                                (0)*(0x4014  < index && index < 0x8000) +
                 (CARTRIDGE_MEMORY)*(0x8000 <= index /*&& index < 0x10000*/);
     }
@@ -99,13 +108,48 @@ struct Memory {
         int offset = map_offset(index);
         index = map_index(offset, index);
 
-        int8u_t value = array[offset + index];
+        bool is_ppu_data_read = (offset == PPU_REGISTERS) && (index == 0x07);
+        int16u_t ppu_address = ((computation_state->ppu_address_H << 8) | computation_state->ppu_address_L);
+        int16u_t address = offset + index;
+        address = is_ppu_data_read ? PPU_MEMORY + palette_mirror_address(ppu_address) : address;
+
+        int8u_t value = array[address];
 
         bool is_ppu_status = (offset == PPU_REGISTERS) && (index == 0x02);
         array[offset + index] &= is_ppu_status ? 0b01111111 : 0xFF;
         computation_state->ppu_address_latch = is_ppu_status ? false : computation_state->ppu_address_latch;
 
+        bool is_controller_read = (offset == CONTROL_PORT_1) && (index == 0x00);
+        if (is_controller_read)
+        {
+            value = ((value << computation_state->controller_read_position) & 0x80) >> 7;
+
+            if (computation_state->controller_read_position > 7) {
+                value = 0x01;
+            }
+
+            computation_state->controller_read_position += 1;
+        }
+
         return value;
+    }
+
+    __device__
+    int16u_t palette_mirror_address(int16u_t ppu_address) {
+        /*
+        http://wiki.nesdev.com/w/index.php/PPU_palettes#Memory_Map
+        Addresses $3F10/$3F14/$3F18/$3F1C are mirrors of
+                  $3F00/$3F04/$3F08/$3F0C */
+        bool any_ = (ppu_address == 0x3F10) ||
+                    (ppu_address == 0x3F14) ||
+                    (ppu_address == 0x3F18) ||
+                    (ppu_address == 0x3F1C);
+
+        return (ppu_address)*(!any_) +
+               (0x3F00)*(ppu_address == 0x3F10) +
+               (0x3F04)*(ppu_address == 0x3F14) +
+               (0x3F08)*(ppu_address == 0x3F18) +
+               (0x3F0C)*(ppu_address == 0x3F1C);
     }
 
     __device__
@@ -123,8 +167,13 @@ struct Memory {
         bool is_ppu_data_write = (offset == PPU_REGISTERS) && (index == 0x07);
         int16u_t ppu_address = ((computation_state->ppu_address_H << 8) | computation_state->ppu_address_L);
 
+        bool is_controller_write = (offset == CONTROL_PORT_1) && (index == 0x00);
+
         int address = is_ppu_data_write ? PPU_MEMORY + ppu_address : offset + index;
         address = is_oam_dma_write ? PPU_OAM_MEMORY + index0 : address;
+        address = is_controller_write ? NULL_ADDRESS_WRITE : address;
+        address = is_ppu_data_write ? PPU_MEMORY + palette_mirror_address(ppu_address) : address;
+
         array[address] = value;
 
         ppu_address += is_ppu_data_write;
@@ -139,6 +188,8 @@ struct Memory {
         // bool is_OAM_address_write = (offset == PPU_REGISTERS) && (index == 0x03);
         // computation_state->dma_target_H = (computation_state->dma_target_H)*(!is_OAM_address_write) + (PPU_OAM_OFFSET >> 8)*is_OAM_address_write;
         // computation_state->dma_target_L = (computation_state->dma_target_L)*(!is_OAM_address_write) + ((PPU_OAM_OFFSET & 0xFF) + value)*is_OAM_address_write;
+
+        computation_state->controller_read_position = (computation_state->controller_read_position)*(!is_controller_write) + (0)*is_controller_write;
     }
 
     __device__
@@ -175,6 +226,9 @@ struct SystemState {
     int traceIndex = 0;
     #endif
 
+    Trace* trace_lines;
+    int trace_lines_index = 0;
+
     SystemState(std::vector<char>& program, int16u_t program_counter, int load_point) {
         std::copy(program.begin(), program.end(), memory.cartridge_memory);
         std::copy(program.begin(), program.end(), (memory.cartridge_memory + 0x4000));
@@ -182,8 +236,12 @@ struct SystemState {
         this->stack_offset = 0xFD;
     }
 
-    SystemState(std::vector<char>& program) {
-        std::copy(program.begin(), program.end(), memory.cartridge_memory);
+    SystemState(std::vector<char>& program_data, std::vector<char>& character_data) {
+        std::copy(program_data.begin(), program_data.end(), memory.cartridge_memory);
+        if (program_data.size() < 0x8000) {
+            std::copy(program_data.begin(), program_data.end(), (memory.cartridge_memory + 0x4000));
+        }
+        std::copy(character_data.begin(), character_data.end(), memory.ppu_memory);
         this->program_counter = (memory.cartridge_memory[0xFFFD % 0x8000] << 8) | memory.cartridge_memory[0xFFFC % 0x8000];
         this->stack_offset = 0xFD;
     }
@@ -212,7 +270,7 @@ struct SystemState {
             .cycle = (int16u_t)(computation_state.ppu_cycle / 3)
         };
 
-        traceIndex++;
+        // traceIndex++;
         #endif
     }
 
@@ -231,10 +289,13 @@ struct SystemState {
         computation_state->has_blanked = computation_state->has_blanked || blank_condition;
         computation_state->has_blanked = computation_state->has_blanked && (computation_state->vertical_scan > 0);
         computation_state->has_vblank_nmi = computation_state->has_vblank_nmi && (computation_state->vertical_scan > 0);
+
+        computation_state->frame_count += (computation_state->vertical_scan == -1) && (computation_state->horizontal_scan == 0);
     }
 
     int stack_pointer = 0;
     int count = 0;
+    int count1 = 0;
 
     __device__
     void next() {
@@ -280,12 +341,13 @@ struct SystemState {
         computation_state.dma_count += even_cycle;
         computation_state.is_dma_active = (computation_state.is_dma_active && !(even_cycle && computation_state.dma_count == 0));
 
-        if (instruction_OK && 0 < ++count) {
-            traceWrite(program_counter, opcodes);
-        }
+        count++;
 
-        int16u_t program_counter_previous = program_counter;
-        int8u_t stack_offset_previous = stack_offset;
+        /*if (threadIdx.x == 7 && instruction_OK) {
+            traceWrite(program_counter, opcodes);
+            trace_lines[trace_lines_index] = traceLineData[0];
+            trace_lines_index++;
+        }*/
 
         operationTransition(opcode, this, &computation_state);
     }

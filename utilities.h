@@ -180,3 +180,15 @@ std::vector<std::vector<std::string>> logRead(std::string file_name)
 
     return output;
 }
+
+void imageWrite(std::vector<char>& pattern_table, std::vector<char>& oam_table)
+{
+    std::fstream file1("ppu_memory.data", std::ios::out | std::ios::binary);
+    std::fstream file2("oam.data", std::ios::out | std::ios::binary);
+
+    file1.write(pattern_table.data(), pattern_table.size());
+    file2.write(oam_table.data(), oam_table.size());
+
+    file1.close();
+    file2.close();
+}

@@ -7,11 +7,9 @@
 
 #include <chrono>
 
-#define DEBUG 1
+// #define DEBUG 1
 
 #define NULL_ADDRESS_MARGIN 4
-#define NULL_ADDRESS_READ (0x10000 + 0)
-#define NULL_ADDRESS_WRITE (0x10000 + 2)
 #define STACK_ZERO 0x0100
 
 typedef const uint8_t flag_t;
@@ -31,6 +29,7 @@ void operationTransition(uint8_t, SystemState*, ComputationState*);
 #include "states.h"
 #include "regions.h"
 #include "_instructions.h"
+#include "utilities.h"
 
 __device__
 void operationTransition(uint8_t opcode, SystemState* state, ComputationState* computation_state) {
@@ -43,11 +42,17 @@ __global__
 void add(int num_states, uint32_t num_instructions, SystemState *states)
 {
     for (int i = 0; i < num_instructions; i++) {
+        int frame_count = states[threadIdx.x].computation_state.frame_count;
+        if (160 < frame_count && frame_count < 200) {
+            states[threadIdx.x].memory.control_port1[0] = 0x10;
+            // states[threadIdx.x].memory.control_port1[0] = 0x00;
+        } else {
+            states[threadIdx.x].memory.control_port1[0] = 0x00;
+        }
+
         states[threadIdx.x].next();
     }
 }
-
-#include "utilities.h"
 
 /* */
 
@@ -55,7 +60,9 @@ int tests(void)
 {
     // int num_states = 256;
     int num_states = 15;
+    // int num_trace_lines = 10000000;
     SystemState *states;
+    // Trace *trace_lines;
 
     uint64_t num_instructions = 0;
     std::cin >> num_instructions;
@@ -131,31 +138,35 @@ int tests(void)
 
 int software(void)
 {
-    // int num_states = 256;
     int num_states = 15;
+    int num_trace_lines = 0;
     SystemState *states;
+    Trace *trace_lines;
 
     uint64_t num_instructions = 0;
     std::cin >> num_instructions;
 
     std::cout << "NUM_INSTRUCTIONS [ " << num_instructions << ", " << sizeof(SystemState) << " ]\n\n";
 
+    std::cout << std::endl;
+
     cudaMallocManaged(&states, num_states*sizeof(SystemState));
+    cudaMallocManaged(&trace_lines, num_trace_lines*sizeof(Trace));
 
     /* */
 
-    auto program_data = romFileRead("roms/Super Mario Bros..nes").first;
-    auto character_data = romFileRead("roms/Super Mario Bros..nes").second;
+    // std::string game = "Donkey Kong.nes";
+    std::string game = "nestest.nes";
+    // std::string game = "Bubble Bobble (U).nes";
+    // std::string game = "Super Mario Bros..nes";
+    auto program_data = romFileRead("roms/" + game).first;
+    auto character_data = romFileRead("roms/" + game).second;
 
     std::vector<std::vector<std::string>> log_lines = logRead("data/nestest.log");
 
     for (int i = 0; i < num_states; i++) {
-        if (i == 7) {
-            states[i] = SystemState(program_data);
-        } else {
-            // states[i] = SystemState(program_data, 0xC000 + i - 7, 0xC000);
-            states[i] = SystemState(program_data);
-        }
+        states[i] = SystemState(program_data, character_data);
+        states[i].trace_lines = trace_lines;
     }
 
     /* */
@@ -168,6 +179,11 @@ int software(void)
     auto stop = std::chrono::high_resolution_clock::now();
 
     std::cout << "\n> " << std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count() << "\n\n";
+
+    std::vector<char> data1(std::begin(states[7].memory.ppu_memory), std::end(states[7].memory.ppu_memory));
+    std::vector<char> data2(std::begin(states[7].memory.ppu_OAM_memory), std::end(states[7].memory.ppu_OAM_memory));
+
+    imageWrite(data1, data2);
 
     /* */
 
@@ -186,41 +202,12 @@ int software(void)
 
     /* */
 
-    for (int i = 0; i < states[7].traceIndex; i++) {
+    for (int i = 0; i < states[7].trace_lines_index; i++) {
         std::cout << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << i << " ";
-        std::cout << "│ " << traceLineFormat(states[7].traceLineData[i], true) << "\n";
+        std::cout << "│ " << traceLineFormat(trace_lines[i], true) << "\n";
     }
 
     std::cout << std::endl;
-
-    int8u_t* ppu_data = &states[7].memory.array[PPU_OFFSET + 0x2000];
-
-    printf("0x2000\n");
-
-    for (int i = 0; i < 1024; i++) {
-        printf(" 0x%02X", ppu_data[i]);
-
-        if ((i + 1) % 16 == 0) {
-            printf("\n");
-        }
-    }
-
-    printf("\n");
-    printf("\n");
-
-    int8u_t* ppu_data2 = &states[7].memory.array[PPU_OAM_OFFSET];
-
-    printf("0x%04X\n", PPU_OAM_OFFSET);
-
-    for (int i = 0; i < 256; i++) {
-        printf(" 0x%02X", ppu_data2[i]);
-
-        if ((i + 1) % 16 == 0) {
-            printf("\n");
-        }
-    }
-
-    printf("\n");
 
     #endif
 

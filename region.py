@@ -34,10 +34,32 @@ class Wire:
     VALUE2 = 2
     VALUE3 = 3
 
-flag = lambda x: "0xFF" if 1 == x else "0x00"
-flag16 = lambda x: "0xFFFF" if 1 == x else "0x0000"
-signed_int = lambda x: x
-unsigned_int = lambda x: x
+flag = lambda x: {'Type': 'Categorical',
+                  'Categories': {1: '0xFF'},
+                  'Construction': lambda name, logic: f'flag_t {name} = {logic};',
+                  'Value': x}
+
+flag16 = lambda x: {'Type': 'Categorical',
+                    'Categories': {1: '0xFFFF'},
+                    'Construction': lambda name, logic: f'flag16_t {name} = {logic};',
+                    'Value': x}
+
+signed_int = lambda x: {'Type': 'Categorical',
+                        'Categories': {1: '1', -1: '-1'},
+                        'Construction': lambda name, logic: f'int_signed_t {name} = {logic};',
+                        'Value': x}
+
+unsigned_int = lambda x: {'Type': 'Categorical',
+                          'Categories': {n: str(n) for n in range(1, 8)},
+                          'Construction': lambda name, logic: f'int_signed_t {name} = {logic};',
+                          'Value': x}
+
+if True:
+# if False:
+    flag = lambda x: "0xFF" if 1 == x else "0x00"
+    flag16 = lambda x: "0xFFFF" if 1 == x else "0x0000"
+    signed_int = lambda x: x
+    unsigned_int = lambda x: x
 
 class Region:
     def struct_form(self):
@@ -54,6 +76,16 @@ class Region:
         result = ' '.join(f'''{class_name}{{{args}}}'''.split())
 
         return result
+
+    def parameter_specification(self):
+        class_name = self.__class__.__name__
+
+        import inspect
+
+        parameters = [v for k, v in inspect.signature(self.__init__).parameters.items() if k in self.args_OK()]
+
+        return {p.name: p.annotation(self.__getattribute__(p.name)) for p in parameters}
+
 
 class Region_Wire(Region):
     def __init__(self, 
@@ -696,6 +728,9 @@ class RegionComposition:
         for _name, region, _class in self.regions:
             region.transition(state, computation_state)
 
+    def all_regions(self, wire, region_program_counter):
+        return {wire: Region_Wire} | dict(np.array(self.regions)[:,1:]) | {region_program_counter: Region_ProgramCounter}
+
     def struct(self, wire_region, byte_count):
         regions_OK = [
             "wire",
@@ -717,5 +752,6 @@ class RegionComposition:
 
         regions = [(name, region) for name, region, _class in self.regions if name in regions_OK]
         regions = [("wire", wire_region)] + regions + [("program_counter", Region_ProgramCounter(PC_increment=byte_count))]
+        # regions = regions + [("program_counter", Region_ProgramCounter(PC_increment=byte_count))]
 
         return 'RegionComposition{' + ', '.join(f'.{name}={region.struct_form()}' for name, region in regions) + '}'

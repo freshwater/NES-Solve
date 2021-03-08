@@ -140,7 +140,7 @@ def SEI() -> [(0x78, implied)]:
     return RegionComposition(flags=Region_Flags(I_keep=0, I_adjust=1))
 def CLI() -> [(0x58, implied)]:
     # state.status_register['Interrupt'] = 0
-    Region_Flags.transition(state, ComputationState(), I_keep=0, I_adjust=0)
+    return RegionComposition(flags=Region_Flags(I_keep=0, I_adjust=0))
 def CLD() -> [(0xD8, implied)]:
     # state.status_register['Decimal'] = 0
     return RegionComposition(flags=Region_Flags(D_keep=0, D_adjust=0))
@@ -701,48 +701,56 @@ def PLP() -> [(0x28, implied, Region_Wire(cycle_base_increment=4))]:
 
 def LAX() -> [(0xA3, indirect_x_dereference), (0xA7, zeropage_dereference), (0xAF, absolute_dereference),
                       (0xB3, indirect_y_dereference), (0xB7, zeropage_y_dereference), (0xBF, absolute_y_dereference)]:
-    assert None, "The End"
-    LDA(state, a)
-    TAX(state, a)
+    # assert None, "The End"
+    # LDA(state, a)
+    # TAX(state, a)
+    return RegionComposition()
 
 def SAX() -> [(0x83, indirect_x_address), (0x87, zeropage_address), (0x8F, absolute_address),
                       (0x97, zeropage_y_address)]:
-    state.memory[a] = state.A & state.X
+    # state.memory[a] = state.A & state.X
+    return RegionComposition()
 
 def DCP() -> [(0xC3, indirect_x_address), (0xC7, zeropage_address), (0xCF, absolute_address),
                       (0xD3, indirect_y_address), (0xD7, zeropage_x_address), (0xDB, absolute_y_address),
                       (0xDF, absolute_x_address)]:
-    DEC_zpg(state, a)
-    CMP(state, state.memory[a])
+    # DEC_zpg(state, a)
+    # CMP(state, state.memory[a])
+    return RegionComposition()
 
 def ISB() -> [(0xE3, indirect_x_address), (0xE7, zeropage_address), (0xEF, absolute_address),
                       (0xF3, indirect_y_address), (0xF7, zeropage_x_address), (0xFB, absolute_y_address),
                       (0xFF, absolute_x_address)]:
-    INC(state, a)
-    SBC(state, state.memory[a])
+    # INC(state, a)
+    # SBC(state, state.memory[a])
+    return RegionComposition()
 
 def SLO() -> [(0x03, indirect_x_address), (0x07, zeropage_address), (0x0F, absolute_address),
                       (0x13, indirect_y_address), (0x17, zeropage_x_address), (0x1B, absolute_y_address),
                       (0x1F, absolute_x_address)]:
-    ASL_zpg(state, a)
-    ORA(state, state.memory[a])
+    # ASL_zpg(state, a)
+    # ORA(state, state.memory[a])
+    return RegionComposition()
 
 def RLA() -> [(0x23, indirect_x_address), (0x27, zeropage_address), (0x2F, absolute_address),
                       (0x33, indirect_y_address), (0x37, zeropage_x_address), (0x3B, absolute_y_address),
                       (0x3F, absolute_x_address)]:
-    ROL_zpg(state, a)
-    AND(state, state.memory[a])
+    # ROL_zpg(state, a)
+    # AND(state, state.memory[a])
+    return RegionComposition()
 
 def SRE() -> [(0x43, indirect_x_address), (0x47, zeropage_address), (0x4F, absolute_address),
                       (0x53, indirect_y_address), (0x57, zeropage_x_address), (0x5B, absolute_y_address),
                       (0x5F, absolute_x_address)]:
-    LSR_zpg(state, a)
-    EOR(state, state.memory[a])
+    # LSR_zpg(state, a)
+    # EOR(state, state.memory[a])
+    return RegionComposition()
 
 def RRA() -> [(0x63, indirect_x_address)]:
-    assert False, False
-    ROR_zpg(state, a)
-    ADC(state, state.memory[a])
+    # assert False, False
+    # ROR_zpg(state, a)
+    # ADC(state, state.memory[a])
+    return RegionComposition()
 
 #-
 
@@ -916,3 +924,123 @@ if __name__ == '__main__':
 
     with open('_instructions.h', 'w') as file:
         file.write('\n' + operations_text + '\n\n' + operation_info_text + '\n')
+
+    exit(0)
+
+    # -------------------
+
+    import sympy.logic
+    import sympy
+
+    opcodes_OK = [0x4C, 0xA2, 0x86, 0x20, 0xEA, 0x38, 0xB0, 0x18, 0x90, 0xA9, 0xF0,
+                  0xD0, 0x85, 0x24, 0x70, 0x50, 0x10, 0x60, 0x78, 0xF8, 0x08, 0x68,
+                  0x29, 0xC9, 0xD8, 0x48, 0x28, 0x30, 0x09, 0xB8, 0x49, 0x69, 0xA0,
+                  0xC0, 0xE0, 0xE9, 0xC8, 0xE8, 0x88, 0xCA, 0xA8, 0xAA, 0x98, 0x8A,
+                  0xBA, 0x8B, 0x8E, 0x9A, 0xAE, 0xAD, 0x40, 0x4A, 0x0A, 0x6A, 0x2A,
+                  0xA5, 0x8D, 0xA1, 0x81, 0x01, 0X21, 0x41, 0x61, 0xC1, 0xE1, 0xA4,
+                  0x84, 0xA6, 0x05, 0x25, 0x45, 0x65, 0xC5, 0xE5, 0xE4, 0xC4, 0x46,
+                  0x06, 0x66, 0x26, 0xE6, 0xC6, 0xAC, 0x8C, 0x2C, 0x0D, 0x2D, 0x4D,
+                  0x6D, 0xCD, 0xED, 0xEC, 0xCC, 0x4E, 0x0E, 0x6E, 0x2E, 0xEE, 0xCE,
+                  0xB1, 0x11, 0x31, 0x51, 0x71, 0xD1, 0xF1, 0x91, 0x6C, 0xB9, 0x19,
+                  0x39, 0x59, 0x79, 0xD9, 0xF9, 0x99, 0xB4, 0x94, 0x15, 0x35, 0x55,
+                  0x75, 0xD5, 0xF5, 0xB5, 0x95, 0x56, 0x16, 0x76, 0x36, 0xF6, 0xD6,
+                  0xB6, 0x96, 0xBC, 0x1D, 0x3D, 0x5D, 0x7D, 0xDD, 0xFD, 0xBD, 0x9D,
+                  0x5E, 0x1E, 0x7E, 0x3E, 0xFE, 0xDE, 0xBE, 0x00,
+
+                  0x6B, 0xAB, 0xB2, 0xC2]
+
+    dontcares = [0x02, 0x12, 0x22, 0x32, 0x42, 0x52, 0x62, 0x67, 0x6F, 0x72, 0x73, 0x77, 0x7B,
+                 0x82, 0x0B, 0x2B, 0x4B, 0x7F, 0x89, 0x8B, 0x92, 0x93, 0x9B, 0x9C, 0x9E, 0x9F,
+                 0xBB, 0xD2, 0xCB, 0xE2, 0xF2]
+
+    symbols = sympy.symbols('b7 b6 b5 b4 b3 b2 b1 b0');
+
+    # for each region
+    for _, class_ in RegionComposition().all_regions(Region_Wire(), Region_ProgramCounter()).items():
+        if class_ not in [
+                          Region_Wire,
+                          Region_Compare,
+                          Region_StackRead,
+                          Region_BooleanLogic,
+                          Region_BitShift,
+                          Region_Arithmetic,
+                          Region_ADC_SBC,
+                          Region_JSR_RTS_RTI,
+                          Region_Rewire,
+                          Region_Branch,
+                          Region_Write,
+                          Region_StackWrite,
+                          Region_ImplementationState,
+                          Region_Flags,
+                          Region_ProgramCounter
+                          ]:
+            continue
+
+        # for each parameter
+        output_strings = []
+        for parameter_name in list(class_().parameter_specification().keys()):
+            # for each instruction, collect all values that parameter takes
+            values = []
+            for opcode in range(256):
+                operation, byte_count, addressing, wire = instructions[opcode]
+                # construct full region configuration
+                instruction_composition = operation()
+                wire = wire or addressing()
+                # print(parameter_name, f'{opcode:02X}', wire.parameter_specification()[parameter_name] if wire is not None else "x")
+
+                if opcode not in opcodes_OK:
+                    wire = Region_Wire()
+                    wire.cycle_base_increment = 0
+
+                if wire.cycle_base_increment == None:
+                    wire.cycle_base_increment = cycle_base_increments[addressing]
+
+                pc_increment = byte_count
+                if opcode in [0x4C, 0x20, 0x60, 0x6C, 0x00]:
+                    # instructions that directly modify the program counter
+                    pc_increment = 0
+
+                if opcode in [0x6B, 0xAB, 0xB2, 0xC2]:
+                    # implementation instructions
+                    pc_increment = 0
+
+                regions = instruction_composition.all_regions(wire=wire, region_program_counter=Region_ProgramCounter(PC_increment=pc_increment))
+
+                region_specific = [region for region, class1 in regions.items() if class1 == class_][0]
+                values.append(region_specific.parameter_specification()[parameter_name])
+
+            # if it is a categorical parameter
+            default_value_spec = values[0]
+            if default_value_spec['Type'] == "Categorical":
+                # collect minterms for each nonzero target category
+                minterms = {}
+                for category in set(value_spec['Value'] for value_spec in values):
+                    if category != 0:
+                        minterms[category] = [instruction for instruction, value_spec in zip(range(256), values)
+                                              if value_spec['Value'] == category]
+
+                if len(minterms) == 0:
+                    print(parameter_name, minterms)
+                    output_strings.append(default_value_spec['Construction'](parameter_name, '0'))
+
+                else:
+                    # find logics
+                    logics2 = {category: sympy.simplify(sympy.logic.SOPform(symbols, terms)) for category, terms in minterms.items()}
+                    logics3 = {category: ' | '.join([f'op = {term:02X}' for term in terms]) for category, terms in minterms.items()}
+                    logics3_full = {category: ' | '.join([f'op == 0x{term:02X}' for term in terms]) for category, terms in minterms.items()}
+
+                    logics_candidates = {category: (str(logics2[category]), str(logics3[category]), str(logics3_full[category])) for category in minterms.keys()}
+                    logics_shortest = {category: a if len(a) < len(b) else b_full for category, (a, b, b_full) in logics_candidates.items()}
+
+                    finalize = lambda x: x.replace('&', '&&').replace('|', '||').replace('~', '!')
+
+                    expression = ' | '.join(f'({default_value_spec["Categories"][category]})*({finalize(str(logic))})' for category, logic in logics_shortest.items())
+                    print(parameter_name, expression)
+                    output_strings.append(default_value_spec['Construction'](parameter_name, expression))
+
+        print()
+        print(class_.__name__)
+        print('\n'.join(output_strings))
+        print()
+        with open(f'generated/_{class_.__name__}.h', 'w') as file:
+            file.write('\n'.join(output_strings))

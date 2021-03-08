@@ -7,7 +7,8 @@
 
 #include <chrono>
 
-// #define DEBUG 1
+#define DEBUG 1
+#define MAXFRAMES 60*10
 
 #define NULL_ADDRESS_MARGIN 4
 #define STACK_ZERO 0x0100
@@ -39,18 +40,29 @@ void operationTransition(uint8_t opcode, SystemState* state, ComputationState* c
 /* */
 
 __global__
-void add(int num_states, uint32_t num_instructions, SystemState *states)
+void add(uint32_t num_instructions, SystemState *states)
 {
+    ComputationState computation_state;
+    computation_state.program_counter = states[threadIdx.x].program_counter_initial;
+    computation_state.stack_offset = states[threadIdx.x].stack_offset_initial;
+
     for (int i = 0; i < num_instructions; i++) {
-        int frame_count = states[threadIdx.x].computation_state.frame_count;
-        if (160 < frame_count && frame_count < 200) {
+        /*if (160 < computation_state.frame_count && computation_state.frame_count < 200) {
             states[threadIdx.x].memory.control_port1[0] = 0x10;
             // states[threadIdx.x].memory.control_port1[0] = 0x00;
         } else {
             states[threadIdx.x].memory.control_port1[0] = 0x00;
-        }
+        }*/
 
-        states[threadIdx.x].next();
+        states[threadIdx.x].next(&computation_state);
+
+        if (computation_state.frame_count == MAXFRAMES) {
+            break;
+        }
+    }
+
+    if (threadIdx.x == 7) {
+        printf("FrameCount(%d)\n", computation_state.frame_count);
     }
 }
 
@@ -58,18 +70,18 @@ void add(int num_states, uint32_t num_instructions, SystemState *states)
 
 int tests(void)
 {
-    // int num_states = 256;
     int num_states = 15;
-    // int num_trace_lines = 10000000;
+    int num_trace_lines = 100000;
     SystemState *states;
-    // Trace *trace_lines;
+    Trace *trace_lines;
 
     uint64_t num_instructions = 0;
     std::cin >> num_instructions;
 
-    std::cout << "NUM_INSTRUCTIONS [ " << num_instructions << ", " << sizeof(SystemState) << " ]\n\n";
+    std::cout << "NUM_INSTRUCTIONS [ " << num_instructions << ", " << sizeof(SystemState) << " ]\n";
 
     cudaMallocManaged(&states, num_states*sizeof(SystemState));
+    cudaMallocManaged(&trace_lines, num_trace_lines*sizeof(Trace));
 
     /* */
 
@@ -78,13 +90,14 @@ int tests(void)
 
     for (int i = 0; i < num_states; i++) {
         states[i] = SystemState(program_data, 0xC000 + i - 7, 0xC000);
+        states[i].trace_lines = trace_lines;
     }
 
     /* */
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    add<<<1, num_states>>>(num_states, num_instructions, states);
+    add<<<1, num_states>>>(num_instructions, states);
     cudaDeviceSynchronize();
 
     auto stop = std::chrono::high_resolution_clock::now();
@@ -101,7 +114,7 @@ int tests(void)
             std::cout << "--------------------------" << "\n";
         }
 
-        std::cout << traceLineFormat(states[i].traceLineData[states[i].traceIndex-1]) << "\n";
+        std::cout << traceLineFormat(states[i].traceLineLast) << "\n";
     }
 
     std::cout << "\n";
@@ -109,9 +122,9 @@ int tests(void)
     /* */
 
     int mismatch_count = 0;
-    for (int i = 0; i < states[7].traceIndex; i++) {
+    for (int i = 0; i < states[7].trace_lines_index; i++) {
         std::string reference = logLineFormat(log_lines[i]);
-        std::string actual = traceLineFormat(states[7].traceLineData[i]);
+        std::string actual = traceLineFormat(trace_lines[i], false);
 
         if (reference == actual) {
             std::cout << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << i << " ";
@@ -143,10 +156,12 @@ int software(void)
     SystemState *states;
     Trace *trace_lines;
 
-    uint64_t num_instructions = 0;
-    std::cin >> num_instructions;
+    uint64_t num_instructions = 100000000;
+    // std::cin >> num_instructions;
 
     std::cout << "NUM_INSTRUCTIONS [ " << num_instructions << ", " << sizeof(SystemState) << " ]\n\n";
+    std::cout << "SIZEOF(RegionComposition)=" << sizeof(RegionComposition) << "\n";
+    std::cout << "SIZEOF(_instructions)=" << sizeof(instructions) << "\n\n";
 
     std::cout << std::endl;
 
@@ -155,10 +170,11 @@ int software(void)
 
     /* */
 
-    // std::string game = "Donkey Kong.nes";
-    std::string game = "nestest.nes";
+    std::string game = "Donkey Kong.nes";
+    // std::string game = "nestest.nes";
     // std::string game = "Bubble Bobble (U).nes";
     // std::string game = "Super Mario Bros..nes";
+    // std::string game = "Spelunker (USA).nes";
     auto program_data = romFileRead("roms/" + game).first;
     auto character_data = romFileRead("roms/" + game).second;
 
@@ -173,7 +189,7 @@ int software(void)
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    add<<<1, num_states>>>(num_states, num_instructions, states);
+    // add<<<1, num_states>>>(num_instructions, states);
     cudaDeviceSynchronize();
 
     auto stop = std::chrono::high_resolution_clock::now();
@@ -195,7 +211,7 @@ int software(void)
             std::cout << "--------------------------" << "\n";
         }
 
-        std::cout << traceLineFormat(states[i].traceLineData[states[i].traceIndex-1]) << "\n";
+        std::cout << traceLineFormat(states[i].traceLineLast) << "\n";
     }
 
     std::cout << "\n";
@@ -220,6 +236,6 @@ int software(void)
 
 int main(void)
 {
-    // return tests();
-    return software();
+    return tests();
+    // return software();
 }

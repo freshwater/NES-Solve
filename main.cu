@@ -7,8 +7,20 @@
 
 #include <chrono>
 
-#define DEBUG 1
-#define MAXFRAMES 60*10
+#define DO_SOFTWARE true
+#define MAXFRAMES 60*2
+#define OBSERVED_INSTANCE 7
+#define FRAMEDATA_SIZE 256*240
+// #define DEBUG 1
+
+// #define SOFTWARE "Donkey Kong.nes"
+// #define SOFTWARE "nestest.nes"
+// #define SOFTWARE "digdug.nes"
+// #define SOFTWARE "Spy vs Spy (USA).nes"
+// #define SOFTWARE "Bubble Bobble (U).nes"
+#define SOFTWARE "Super Mario Bros..nes"
+// #define SOFTWARE "Mario Bros (JU).nes"
+// #define SOFTWARE "Spelunker (USA).nes"
 
 #define NULL_ADDRESS_MARGIN 4
 #define STACK_ZERO 0x0100
@@ -47,9 +59,8 @@ void add(uint32_t num_instructions, SystemState *states)
     computation_state.stack_offset = states[threadIdx.x].stack_offset_initial;
 
     for (int i = 0; i < num_instructions; i++) {
-        /*if (160 < computation_state.frame_count && computation_state.frame_count < 200) {
+        /*if (30*8 < computation_state.frame_count && computation_state.frame_count < 30*9 + 10) {
             states[threadIdx.x].memory.control_port1[0] = 0x10;
-            // states[threadIdx.x].memory.control_port1[0] = 0x00;
         } else {
             states[threadIdx.x].memory.control_port1[0] = 0x00;
         }*/
@@ -61,8 +72,9 @@ void add(uint32_t num_instructions, SystemState *states)
         }
     }
 
-    if (threadIdx.x == 7) {
+    if (threadIdx.x == OBSERVED_INSTANCE) {
         printf("FrameCount(%d)\n", computation_state.frame_count);
+        printf("NMI(%d)\n", computation_state.nmi_count);
     }
 }
 
@@ -155,51 +167,63 @@ int software(void)
     int num_trace_lines = 0;
     SystemState *states;
     Trace *trace_lines;
+    uint8_t* frames_red;
+    uint8_t* frames_green;
+    uint8_t* frames_blue;
 
     uint64_t num_instructions = 100000000;
     // std::cin >> num_instructions;
 
-    std::cout << "NUM_INSTRUCTIONS [ " << num_instructions << ", " << sizeof(SystemState) << " ]\n\n";
-    std::cout << "SIZEOF(RegionComposition)=" << sizeof(RegionComposition) << "\n";
-    std::cout << "SIZEOF(_instructions)=" << sizeof(instructions) << "\n\n";
-
-    std::cout << std::endl;
+    std::cout << "\n[]\n\n" << std::endl;
 
     cudaMallocManaged(&states, num_states*sizeof(SystemState));
     cudaMallocManaged(&trace_lines, num_trace_lines*sizeof(Trace));
+    cudaMallocManaged(&frames_red, FRAMEDATA_SIZE);
+    cudaMallocManaged(&frames_green, FRAMEDATA_SIZE);
+    cudaMallocManaged(&frames_blue, FRAMEDATA_SIZE);
 
     /* */
 
-    std::string game = "Donkey Kong.nes";
-    // std::string game = "nestest.nes";
-    // std::string game = "Bubble Bobble (U).nes";
-    // std::string game = "Super Mario Bros..nes";
-    // std::string game = "Spelunker (USA).nes";
-    auto program_data = romFileRead("roms/" + game).first;
-    auto character_data = romFileRead("roms/" + game).second;
+    std::string software = SOFTWARE;
+
+    auto program_data = romFileRead("roms/" + software).first;
+    auto character_data = romFileRead("roms/" + software).second;
 
     std::vector<std::vector<std::string>> log_lines = logRead("data/nestest.log");
 
     for (int i = 0; i < num_states; i++) {
         states[i] = SystemState(program_data, character_data);
-        states[i].trace_lines = trace_lines;
     }
+
+    states[OBSERVED_INSTANCE].trace_lines = trace_lines;
+    states[OBSERVED_INSTANCE].frames_red = frames_red;
+    states[OBSERVED_INSTANCE].frames_green = frames_green;
+    states[OBSERVED_INSTANCE].frames_blue = frames_blue;
+
+    memset(frames_red, 111, FRAMEDATA_SIZE);
 
     /* */
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    // add<<<1, num_states>>>(num_instructions, states);
+    add<<<1, num_states>>>(num_instructions, states);
     cudaDeviceSynchronize();
 
     auto stop = std::chrono::high_resolution_clock::now();
 
     std::cout << "\n> " << std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count() << "\n\n";
 
-    std::vector<char> data1(std::begin(states[7].memory.ppu_memory), std::end(states[7].memory.ppu_memory));
-    std::vector<char> data2(std::begin(states[7].memory.ppu_OAM_memory), std::end(states[7].memory.ppu_OAM_memory));
+    std::vector<char> data1(std::begin(states[OBSERVED_INSTANCE].memory.ppu_memory), std::end(states[OBSERVED_INSTANCE].memory.ppu_memory));
+    std::vector<char> data2(std::begin(states[OBSERVED_INSTANCE].memory.ppu_OAM_memory), std::end(states[OBSERVED_INSTANCE].memory.ppu_OAM_memory));
 
-    imageWrite(data1, data2);
+    std::vector<char> data3(FRAMEDATA_SIZE);
+    std::vector<char> data4(FRAMEDATA_SIZE);
+    std::vector<char> data5(FRAMEDATA_SIZE);
+    memcpy(data3.data(), frames_red, FRAMEDATA_SIZE);
+    memcpy(data4.data(), frames_green, FRAMEDATA_SIZE);
+    memcpy(data5.data(), frames_blue, FRAMEDATA_SIZE);
+
+    imageWrite(data1, data2, data3, data4, data5);
 
     /* */
 
@@ -218,7 +242,7 @@ int software(void)
 
     /* */
 
-    for (int i = 0; i < states[7].trace_lines_index; i++) {
+    for (int i = 0; i < states[OBSERVED_INSTANCE].trace_lines_index; i++) {
         std::cout << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << i << " ";
         std::cout << "│ " << traceLineFormat(trace_lines[i], true) << "\n";
     }
@@ -236,6 +260,9 @@ int software(void)
 
 int main(void)
 {
-    return tests();
-    // return software();
+    if (DO_SOFTWARE) {
+        return software();
+    } else {
+        return tests();
+    }
 }

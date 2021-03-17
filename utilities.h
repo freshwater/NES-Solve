@@ -181,14 +181,25 @@ std::vector<std::vector<std::string>> logRead(std::string file_name)
     return output;
 }
 
-void imageWrite(std::vector<char>& pattern_table, std::vector<char>& oam_table)
+void imageWrite(std::vector<char>& pattern_table, std::vector<char>& oam_table,
+                std::vector<char>& frames_red, std::vector<char>& frames_green, std::vector<char>& frames_blue)
 {
     std::fstream file1("ppu_memory.data", std::ios::out | std::ios::binary);
     std::fstream file2("oam.data", std::ios::out | std::ios::binary);
+    std::fstream file3("frames_red.data", std::ios::out | std::ios::binary);
+    std::fstream file4("frames_green.data", std::ios::out | std::ios::binary);
+    std::fstream file5("frames_blue.data", std::ios::out | std::ios::binary);
 
     file1.write(pattern_table.data(), pattern_table.size());
     file2.write(oam_table.data(), oam_table.size());
 
+    file3.write(frames_red.data(), frames_red.size());
+    file4.write(frames_green.data(), frames_green.size());
+    file5.write(frames_blue.data(), frames_blue.size());
+
     file1.close();
     file2.close();
+    file3.close();
+    file4.close();
+    file5.close();
 }

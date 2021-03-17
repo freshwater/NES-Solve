@@ -129,7 +129,8 @@ struct Region_StackRead {
     __device__
     void transition(SystemState* system, ComputationState* state) const {
         state->stack_offset += stack_offset_pre_adjust;
-        int16u_t address = (NULL_ADDRESS_READ)&(~value1_from_stack_read) | (STACK_ZERO | state->stack_offset)&value1_from_stack_read;
+        // int16u_t address = (NULL_ADDRESS_READ)&(~value1_from_stack_read) | (STACK_ZERO | state->stack_offset)&value1_from_stack_read;
+        int address = (value1_from_stack_read == 0x0000) ? NULL_ADDRESS_READ : (STACK_ZERO | state->stack_offset);
 
         state->value1 = (state->value1)&(~value1_from_stack_read) | (system->memory[address])&value1_from_stack_read;
         int8u_t special_status_bits = Behaviors::special_status_bits_on_pull(state, state->value1, read_special_status_bits);
@@ -235,16 +236,18 @@ struct Region_JSR_RTS_RTI {
 
         state->stack_offset += pre_offset;
 
-        int16u_t write_address = (NULL_ADDRESS_WRITE)&(~any_jump) | (STACK_ZERO | state->stack_offset)&any_jump;
-        int16u_t read_address = (NULL_ADDRESS_READ)&(~any_return) | (STACK_ZERO | state->stack_offset)&any_return;
+        // int16u_t write_address = (NULL_ADDRESS_WRITE)&(~any_jump) | (STACK_ZERO | state->stack_offset)&any_jump;
+        int write_address = (any_jump == 0x0000) ? NULL_ADDRESS_WRITE : (STACK_ZERO | state->stack_offset);
+        int read_address = (any_return == 0x0000) ? NULL_ADDRESS_READ : (STACK_ZERO | state->stack_offset);
         /*write*/system->memory[write_address] = pc_H;
          /*read*/pc_L = (pc_L)&(~any_return) | (system->memory[read_address])&any_return;
 
         state->stack_offset += pre_offset;
         state->stack_offset += post_offset;
 
-        write_address = (NULL_ADDRESS_WRITE)&(~any_jump) | (STACK_ZERO | state->stack_offset)&any_jump;
-        read_address = (NULL_ADDRESS_READ)&(~any_return) | (STACK_ZERO | state->stack_offset)&any_return;
+        // write_address = (NULL_ADDRESS_WRITE)&(~any_jump) | (STACK_ZERO | state->stack_offset)&any_jump;
+        write_address = (any_jump == 0x0000) ? NULL_ADDRESS_WRITE : (STACK_ZERO | state->stack_offset);
+        read_address = (any_return == 0x0000) ? NULL_ADDRESS_READ : (STACK_ZERO | state->stack_offset);
         /*write*/system->memory[write_address] = pc_L;
          /*read*/pc_H = (pc_H)&(~any_return) | (system->memory[read_address])&any_return;
 
@@ -310,8 +313,8 @@ struct Region_Write {
 
     __device__
     void transition(SystemState* system, ComputationState* state) const {
-        int address = (memory_write_value1 == 0x0000) ? NULL_ADDRESS_WRITE : (state->address)&memory_write_value1;
-        address = (oam_memory_write_value1 == 0x0000) ? address : (state->address)&oam_memory_write_value1;
+        int address = (memory_write_value1 == 0x0000) ? NULL_ADDRESS_WRITE : state->address;
+        address = (oam_memory_write_value1 == 0x0000) ? address : state->address;
 
         system->memory.write(address, state->value1, oam_memory_write_value1, state);
     }
@@ -323,7 +326,8 @@ struct Region_StackWrite {
 
     __device__
     void transition(SystemState* system, ComputationState* state) const {
-        int16u_t address = (NULL_ADDRESS_WRITE)&(~stack_write_value1) | (STACK_ZERO | state->stack_offset)&stack_write_value1;
+        // int16u_t address = (NULL_ADDRESS_WRITE)&(~stack_write_value1) | (STACK_ZERO | state->stack_offset)&stack_write_value1;
+        int address = (stack_write_value1 == 0x0000) ? NULL_ADDRESS_WRITE : (STACK_ZERO | state->stack_offset);
         system->memory[address] = state->value1;
 
         state->stack_offset += stack_offset_post_adjust;
@@ -383,8 +387,7 @@ struct Region_Flags {
         state->D = ((state->D)&D_keep) + D_adjust;
         state->Z = ((state->Z)&Z_keep) + Z_adjust + (Z_value == 0)*(Z_adjust_source != 0);
         state->C = ((state->C)&C_keep) + C_adjust + (C_direct_value)*(C_adjust_direct != 0);
-                        // todo check games
-        // system->I = (system->I)*I_keep + I_adjust;
+        state->I = ((state->I)&I_keep) + I_adjust;
 
         state->N = (state->N)&(~set_byte_from_value1) | (state->value1 >> 7)&set_byte_from_value1;
         state->O = (state->O)&(~set_byte_from_value1) | (state->value1 >> 6)&set_byte_from_value1;

@@ -8,22 +8,20 @@
 #include <chrono>
 
 #define DO_SOFTWARE true
-#define MAXFRAMES 60*2
+#define MAXFRAMES (60*11 + 30)
 #define OBSERVED_INSTANCE 7
 #define FRAMEDATA_SIZE 256*240
 // #define DEBUG 1
 
-// #define SOFTWARE "Donkey Kong.nes"
+#define SOFTWARE "Donkey Kong.nes"
 // #define SOFTWARE "nestest.nes"
+// #define SOFTWARE "01-basics.nes"
 // #define SOFTWARE "digdug.nes"
 // #define SOFTWARE "Spy vs Spy (USA).nes"
 // #define SOFTWARE "Bubble Bobble (U).nes"
-#define SOFTWARE "Super Mario Bros..nes"
+// #define SOFTWARE "Super Mario Bros..nes"
 // #define SOFTWARE "Mario Bros (JU).nes"
 // #define SOFTWARE "Spelunker (USA).nes"
-
-#define NULL_ADDRESS_MARGIN 4
-#define STACK_ZERO 0x0100
 
 typedef const uint8_t flag_t;
 typedef const uint16_t flag16_t;
@@ -59,11 +57,15 @@ void add(uint32_t num_instructions, SystemState *states)
     computation_state.stack_offset = states[threadIdx.x].stack_offset_initial;
 
     for (int i = 0; i < num_instructions; i++) {
-        /*if (30*8 < computation_state.frame_count && computation_state.frame_count < 30*9 + 10) {
+        if (30*4 < computation_state.frame_count && computation_state.frame_count < 30*5 + 10) {
             states[threadIdx.x].memory.control_port1[0] = 0x10;
+        } else if (30*21 <= computation_state.frame_count && computation_state.frame_count < 30*22) {
+            states[threadIdx.x].memory.control_port1[0] = 0x01;
+        } else if (30*22 <= computation_state.frame_count && computation_state.frame_count < 30*23) {
+            states[threadIdx.x].memory.control_port1[0] = 0x81;
         } else {
             states[threadIdx.x].memory.control_port1[0] = 0x00;
-        }*/
+        }
 
         states[threadIdx.x].next(&computation_state);
 
@@ -101,7 +103,7 @@ int tests(void)
     std::vector<std::vector<std::string>> log_lines = logRead("data/nestest.log");
 
     for (int i = 0; i < num_states; i++) {
-        states[i] = SystemState(program_data, 0xC000 + i - 7, 0xC000);
+        states[i] = SystemState(program_data, 0xC000 + i - OBSERVED_INSTANCE, 0xC000);
         states[i].trace_lines = trace_lines;
     }
 
@@ -113,7 +115,6 @@ int tests(void)
     cudaDeviceSynchronize();
 
     auto stop = std::chrono::high_resolution_clock::now();
-
     std::cout << "\n> " << std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count() << "\n\n";
 
     /* */
@@ -122,7 +123,7 @@ int tests(void)
 
     std::cout << "\n";
     for (int i = 0; i < num_states; i++) {
-        if (i == 7 || i == 8) {
+        if (i == OBSERVED_INSTANCE || i == OBSERVED_INSTANCE + 1) {
             std::cout << "--------------------------" << "\n";
         }
 
@@ -134,7 +135,7 @@ int tests(void)
     /* */
 
     int mismatch_count = 0;
-    for (int i = 0; i < states[7].trace_lines_index; i++) {
+    for (int i = 0; i < states[OBSERVED_INSTANCE].trace_lines_index; i++) {
         std::string reference = logLineFormat(log_lines[i]);
         std::string actual = traceLineFormat(trace_lines[i], false);
 
@@ -157,6 +158,7 @@ int tests(void)
     /* */
 
     cudaFree(states);
+    cudaFree(trace_lines);
 
     return 0;
 }
@@ -210,7 +212,6 @@ int software(void)
     cudaDeviceSynchronize();
 
     auto stop = std::chrono::high_resolution_clock::now();
-
     std::cout << "\n> " << std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count() << "\n\n";
 
     std::vector<char> data1(std::begin(states[OBSERVED_INSTANCE].memory.ppu_memory), std::end(states[OBSERVED_INSTANCE].memory.ppu_memory));
@@ -230,17 +231,6 @@ int software(void)
     #ifdef DEBUG
 
     std::cout << "\n";
-    for (int i = 0; i < num_states; i++) {
-        if (i == 7 || i == 8) {
-            std::cout << "--------------------------" << "\n";
-        }
-
-        std::cout << traceLineFormat(states[i].traceLineLast) << "\n";
-    }
-
-    std::cout << "\n";
-
-    /* */
 
     for (int i = 0; i < states[OBSERVED_INSTANCE].trace_lines_index; i++) {
         std::cout << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << i << " ";
@@ -254,6 +244,10 @@ int software(void)
     /* */
 
     cudaFree(states);
+    cudaFree(trace_lines);
+    cudaFree(frames_red);
+    cudaFree(frames_green);
+    cudaFree(frames_blue);
 
     return 0;
 }

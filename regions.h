@@ -1,4 +1,6 @@
 
+#define STACK_ZERO 0x0100
+
 struct Region_Wire {
     flag_t value1_from_data1 = 0;
     flag16_t value1_from_zeropage_dereference = 0;
@@ -201,7 +203,6 @@ struct Region_ADC_SBC {
     __device__
     void transition(SystemState* system, ComputationState* state) const {
         int8u_t value1 = (state->value1)&(~value1_from_SBC) | (state->value1 ^ 0xFF)&value1_from_SBC;
-        // int8u_t value1 = state->value1;
         int16u_t result = state->A + value1 + state->C;
         int8u_t new_carry = result > 0xFF;
         result &= 0xFF;
@@ -415,33 +416,6 @@ struct Region_ProgramCounter {
     __device__
     void transition(SystemState* system, ComputationState* state) const {
         state->program_counter += PC_increment;
-    }
-};
-
-struct Region_ComputationStateLoad {
-    __device__
-    static void transition(SystemState* system, ComputationState* state) {
-        state->ppu_status = system->memory[PPU_STATUS];
-    }
-};
-
-struct Region_ComputationStateStore {
-    __device__
-    void transition(SystemState* system, ComputationState* state) const {
-        system->memory[PPU_STATUS] = state->ppu_status;
-    }
-};
-
-struct Region_VerticalBlank {
-    __device__
-    void transition(SystemState* system, ComputationState* state) const {
-        bool blank_condition = !(state->has_blanked) &&
-                                (state->vertical_scan >= 241) &&
-                                (state->horizontal_scan >= 2);
-
-        system->memory[PPU_STATUS] |= blank_condition ? 0x80 : 0x00;
-        state->has_blanked = state->has_blanked || blank_condition;
-        state->has_blanked = state->has_blanked && (state->vertical_scan > 0);
     }
 };
 

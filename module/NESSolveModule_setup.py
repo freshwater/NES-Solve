@@ -8,7 +8,9 @@ class build_ext(setuptools.command.build_ext.build_ext):
     def build_extensions(self):
 
         compiler_so = ['nvcc', '--x=cu',
-                               '-Xcompiler', '-fPIC'
+                               '-Xcompiler', '-fPIC',
+                               '-Xcompiler', '-I../src',
+                               '-Xcompiler', '-I../generated',
                                # '-Xcompiler', '-pthread',
                                # '-Xcompiler="-B/home/amr/anaconda3/compiler_compat"',
                                # '-Xptxas', '-O0',

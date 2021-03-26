@@ -922,7 +922,8 @@ if __name__ == '__main__':
     operations_text = operations_begin + ',\n    '.join(operations) + operations_end
     operation_info_text = operation_info_begin + ',\n    '.join(operation_info) + operation_info_end
 
-    with open('_instructions.h', 'w') as file:
+    import sys
+    with open(sys.argv[1], 'w') as file:
         file.write('\n' + operations_text + '\n\n' + operation_info_text + '\n')
 
     exit(0)

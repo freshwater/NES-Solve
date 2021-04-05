@@ -61,6 +61,11 @@ if True:
     signed_int = lambda x: x
     unsigned_int = lambda x: x
 
+flag1 = lambda x: x # "true" if 1 == x else "false"
+# flag1 = lambda x: "-1" if 1 == x else "1"
+
+selector = lambda x: f'0x{x:04X}'
+
 class Region:
     def struct_form(self):
         class_name = self.__class__.__name__
@@ -90,29 +95,36 @@ class Region:
 class Region_Wire(Region):
     def __init__(self, 
                  value1_from_address=0,
-                 value1_from_data1: flag = 0,
-                 value1_from_zeropage_dereference: flag16 = 0,
-                 value1_from_absolute_dereference: flag16 = 0,
-                 value1_from_zeropage_x_dereference: flag16 = 0,
-                 value1_from_absolute_x_dereference: flag16 = 0,
-                 value1_from_indirect_x_dereference: flag16 = 0,
-                 value1_from_zeropage_y_dereference: flag16 = 0,
-                 value1_from_absolute_y_dereference: flag16 = 0,
-                 value1_from_indirect_y_dereference: flag16 = 0,
-                 value1_from_stack_offset: flag = 0,
-                 value1_from_A: flag = 0,
-                 value1_from_X: flag = 0,
-                 value1_from_Y: flag = 0,
-                 address_from_absolute: flag16 = 0,
-                 address_from_absolute_y: flag16 = 0,
-                 address_from_absolute_dereference: flag16 = 0,
-                 address_from_zeropage: flag16 = 0,
-                 address_from_zeropage_x: flag16 = 0,
-                 address_from_absolute_x: flag16 = 0,
-                 address_from_indirect_x: flag16 = 0,
-                 address_from_zeropage_y: flag16 = 0,
-                 address_from_indirect_y: flag16 = 0,
-                 cycle_base_increment: unsigned_int = None):
+                 value1_from_data1: flag1 = 0,
+                 value1_from_stack_offset: flag1 = 0,
+                 value1_from_A: flag1 = 0,
+                 value1_from_X: flag1 = 0,
+                 value1_from_Y: flag1 = 0,
+                 value1_from_zeropage_dereference: flag1 = 0,
+                 value1_from_absolute_dereference: flag1 = 0,
+                 value1_from_zeropage_x_dereference: flag1 = 0,
+                 value1_from_absolute_x_dereference: flag1 = 0,
+                 value1_from_indirect_x_dereference: flag1 = 0,
+                 value1_from_zeropage_y_dereference: flag1 = 0,
+                 value1_from_absolute_y_dereference: flag1 = 0,
+                 value1_from_indirect_y_dereference: flag1 = 0,
+                 address_from_absolute: flag1 = 0,
+                 address_from_absolute_y: flag1 = 0,
+                 address_from_absolute_dereference: flag1 = 0,
+                 address_from_zeropage: flag1 = 0,
+                 address_from_zeropage_x: flag1 = 0,
+                 address_from_absolute_x: flag1 = 0,
+                 address_from_indirect_x: flag1 = 0,
+                 address_from_zeropage_y: flag1 = 0,
+                 address_from_indirect_y: flag1 = 0,
+                 cycle_base_increment: flag1 = None,
+
+                 indirect_x__address_absolute__select: selector = 0,
+                 value1_select: selector = 0,
+                 # any: flag1 = 1
+                 any_dereference: flag1 = 1
+                 ):
+
         self.value1_from_A = value1_from_A
         self.value1_from_X = value1_from_X
         self.value1_from_Y = value1_from_Y
@@ -139,6 +151,39 @@ class Region_Wire(Region):
         self.address_from_absolute_x = address_from_absolute_x
 
         self.cycle_base_increment = cycle_base_increment
+
+
+        any_indirect_x = self.value1_from_indirect_x_dereference | self.address_from_indirect_x
+        any_indirect_y = self.value1_from_indirect_y_dereference | self.address_from_indirect_y
+
+        self.indirect_x__address_absolute__select = 0x0300
+        if any_indirect_x or any_indirect_y:
+            self.indirect_x__address_absolute__select = 0x0001
+        elif self.address_from_absolute_dereference:
+            self.indirect_x__address_absolute__select = 0x0054
+
+        self.any_dereference = (self.value1_from_zeropage_dereference | self.value1_from_absolute_dereference |
+                                self.value1_from_zeropage_x_dereference | self.value1_from_absolute_x_dereference |
+                                self.value1_from_zeropage_y_dereference | self.value1_from_absolute_y_dereference |
+                                self.value1_from_indirect_x_dereference | self.value1_from_indirect_y_dereference);
+
+        """[0000|0000|0000|0000], [0000|0000|0000|0000]"""
+        """[  3 |  2 |  1 |  0 ], [  7 |  6 |  5 |  4 ]"""
+        self.value1_select = 0x0000
+        if self.value1_from_data1:
+            self.value1_select = 0x0003
+        elif any_dereference:
+            self.value1_select = 0x0002
+        elif self.value1_from_stack_offset:
+            self.value1_select = 0x0001
+        elif self.value1_from_A:
+            self.value1_select = 0x0007
+        elif self.value1_from_X:
+            self.value1_select = 0x0006
+        elif self.value1_from_Y:
+            self.value1_select = 0x0005
+
+        self.any = any
 
     def read_if(state, address, condition):
         # print(condition, state.memory[(ComputationState.NULL_ADDRESS)*(1-condition) + (address)*condition], state.memory[-1])
@@ -274,20 +319,29 @@ class Region_Wire(Region):
                 'address_from_indirect_x',
                 'address_from_zeropage_y',
                 'address_from_indirect_y',
-                'cycle_base_increment']
+                'cycle_base_increment',
+
+                # 'indirect_x__address_absolute__select',
+                # 'value1_select'
+                # 'any'
+                # 'any_dereference'
+                ]
 
 class Region_Compare(Region):
-    def __init__(self, A_compare_with_value1: flag = 0,
-                       X_compare_with_value1: flag = 0,
-                       Y_compare_with_value1: flag = 0,
-                       value1_out: flag = 0,
-                       value3_from_carry: flag = 0):
+    def __init__(self, A_compare_with_value1: flag1 = 0,
+                       X_compare_with_value1: flag1 = 0,
+                       Y_compare_with_value1: flag1 = 0,
+                       value1_out: flag1 = 0,
+                       value3_from_carry: flag1 = 0):
         self.A_compare_with_value1 = A_compare_with_value1
         self.X_compare_with_value1 = X_compare_with_value1
         self.Y_compare_with_value1 = Y_compare_with_value1
 
         self.value1_out = value1_out
         self.value3_from_carry = value3_from_carry
+
+        self.value1_out_n = value1_out*0x01
+        self.value3_from_carry_n = value3_from_carry*0x01
 
     def transition(self, state, computation_state):
         result = state.A*self.A_compare_with_value1 + state.X*self.X_compare_with_value1 + state.Y*self.Y_compare_with_value1 - computation_state.value1
@@ -297,16 +351,18 @@ class Region_Compare(Region):
         computation_state.value3 = computation_state.value3*(1-self.value3_from_carry) + carry*self.value3_from_carry
 
     def args_OK(self):
-        return ['A_compare_with_value1', 'X_compare_with_value1', 'Y_compare_with_value1', 'value1_out', 'value3_from_carry']
+        return ['A_compare_with_value1', 'X_compare_with_value1', 'Y_compare_with_value1', 'value1_out', 'value3_from_carry',
+                # 'value1_out_n', 'value3_from_carry_n'
+                ]
 
 class Region_BooleanLogic(Region):
-    def __init__(self, A_AND_value1: flag = 0,
-                       A_OR_value1: flag = 0,
-                       A_XOR_value1: flag = 0,
+    def __init__(self, A_AND_value1: flag1 = 0,
+                       A_OR_value1: flag1 = 0,
+                       A_XOR_value1: flag1 = 0,
                        A_wire=0,
-                       value1_out: flag = 0,
+                       value1_out: flag1 = 0,
                        value2_wire=0,
-                       value3_out: flag = 0):
+                       value3_out: flag1 = 0):
         self.A_wire = A_wire
         self.A_OR_value1, self.A_XOR_value1, self.A_AND_value1 = A_OR_value1, A_XOR_value1, A_AND_value1
         self.value1_out, self.value2_wire, self.value3_out = value1_out, value2_wire, value3_out
@@ -325,16 +381,19 @@ class Region_BooleanLogic(Region):
         return ['A_AND_value1', 'A_OR_value1', 'A_XOR_value1', 'value1_out', 'value3_out']
 
 class Region_BitShift(Region):
-    def __init__(self, left_shift_from_value1: flag = 0,
-                       right_shift_from_value1: flag = 0,
-                       left_rotate_from_value1: flag = 0,
-                       right_rotate_from_value1: flag = 0,
-                       value1_out: flag = 0,
-                       value3_from_carry: flag = 0):
+    def __init__(self, left_shift_from_value1: flag1 = 0,
+                       right_shift_from_value1: flag1 = 0,
+                       left_rotate_from_value1: flag1 = 0,
+                       right_rotate_from_value1: flag1 = 0,
+                       value1_out: flag1 = 0,
+                       value3_from_carry: flag1 = 0,
+                       any: flag1 = 0):
         self.right_shift_from_value1 = right_shift_from_value1
         self.right_rotate_from_value1 = right_rotate_from_value1
         self.left_shift_from_value1 = left_shift_from_value1
         self.left_rotate_from_value1 = left_rotate_from_value1
+
+        self.any = left_shift_from_value1 | right_shift_from_value1 | left_rotate_from_value1 | right_rotate_from_value1;
 
         self.value1_out = value1_out
         self.value3_from_carry = value3_from_carry
@@ -361,7 +420,7 @@ class Region_BitShift(Region):
                 'value1_out', 'value3_from_carry']
 
 class Region_Arithmetic(Region):
-    def __init__(self, value1_increment: signed_int = 0):
+    def __init__(self, value1_increment: flag1 = 0):
         self.value1_increment = value1_increment
 
     def transition(self, state, computation_state):
@@ -371,8 +430,8 @@ class Region_Arithmetic(Region):
         return ['value1_increment']
 
 class Region_StackRead(Region):
-    def __init__(self, value1_from_stack_read: flag16 = 0,
-                       read_special_status_bits: flag = 0,
+    def __init__(self, value1_from_stack_read: flag1 = 0,
+                       read_special_status_bits: flag1 = 0,
                        stack_offset_pre_adjust: signed_int = 0):
         self.value1_from_stack_read = value1_from_stack_read
         self.read_special_status_bits = read_special_status_bits
@@ -385,13 +444,13 @@ class Region_StackRead(Region):
         computation_state.value1 = computation_state.value1*(1-self.read_special_status_bits) + (special_status_bits)*self.read_special_status_bits
 
     def args_OK(self):
-        return ['value1_from_stack_read', 'read_special_status_bits', 'stack_offset_pre_adjust']
+        return ['value1_from_stack_read', 'read_special_status_bits'] # , 'stack_offset_pre_adjust']
 
 class Region_ADC_SBC(Region):
-    def __init__(self, value1_from_ADC: flag = 0,
-                       value1_from_SBC: flag = 0,
-                       value2_from_overflow: flag = 0,
-                       value3_from_carry: flag = 0):
+    def __init__(self, value1_from_ADC: flag1 = 0,
+                       value1_from_SBC: flag1 = 0,
+                       value2_from_overflow: flag1 = 0,
+                       value3_from_carry: flag1 = 0):
         self.value1_from_ADC = value1_from_ADC
         self.value1_from_SBC = value1_from_SBC
         self.value2_from_overflow = value2_from_overflow
@@ -412,19 +471,24 @@ class Region_ADC_SBC(Region):
         computation_state.value3 = (computation_state.value3)*(1-self.value3_from_carry) + (new_carry)*self.value3_from_carry
 
     def args_OK(self):
-        return ['value1_from_ADC', 'value1_from_SBC', 'value2_from_overflow', 'value3_from_carry']
+        return ['value1_from_ADC', 'value1_from_SBC'] # , 'value2_from_overflow', 'value3_from_carry']
 
 class Region_JSR_RTS_RTI(Region):
-    def __init__(self, jsr_OK: flag16 = 0,
-                       rts_OK: flag16 = 0,
-                       rti_OK: flag16 = 0,
-                       brk_OK: flag16 = 0,
-                       nmi_OK: flag16 = 0):
+    def __init__(self, jsr_OK: flag1 = 0,
+                       rts_OK: flag1 = 0,
+                       rti_OK: flag1 = 0,
+                       brk_OK: flag1 = 0,
+                       nmi_OK: flag1 = 0,
+
+                       any_OK: flag1 = 0
+                       ):
         self.jsr_OK = jsr_OK
         self.rts_OK = rts_OK
         self.rti_OK = rti_OK
         self.brk_OK = brk_OK
         self.nmi_OK = nmi_OK
+
+        self.any_OK = jsr_OK | rts_OK | rti_OK | brk_OK | nmi_OK;
 
     def transition(self, state, computation_state):
         program_counter = state.program_counter + (-1)*self.jsr_OK
@@ -466,14 +530,14 @@ class Region_JSR_RTS_RTI(Region):
         state.program_counter = (state.program_counter)*(1-any_) + (new_program_counter)*any_
 
     def args_OK(self):
-        return ['jsr_OK', 'rts_OK', 'rti_OK', 'brk_OK', 'nmi_OK']
+        return ['jsr_OK', 'rts_OK', 'rti_OK', 'brk_OK', 'nmi_OK', 'any_OK']
 
 class Region_Branch(Region):
-    def __init__(self, flag_match: unsigned_int =0,
-                       N_flag_branch: flag = 0,
-                       O_flag_branch: flag = 0,
-                       Z_flag_branch: flag = 0,
-                       C_flag_branch: flag = 0):
+    def __init__(self, flag_match:    flag1 = 0,
+                       N_flag_branch: flag1 = 0,
+                       O_flag_branch: flag1 = 0,
+                       Z_flag_branch: flag1 = 0,
+                       C_flag_branch: flag1 = 0):
         self.flag_match = flag_match
         self.N_flag_branch = N_flag_branch
         self.O_flag_branch = O_flag_branch
@@ -492,13 +556,13 @@ class Region_Branch(Region):
         return ['flag_match', 'N_flag_branch', 'O_flag_branch', 'Z_flag_branch', 'C_flag_branch']
 
 class Region_Rewire(Region):
-    def __init__(self, value1_from_status_push_bits: flag = 0,
-                       value2_from_value1_bit6: flag = 0,
-                       A_from_value1: flag = 0,
-                       X_from_value1: flag = 0,
-                       Y_from_value1: flag = 0,
-                       program_counter_from_address: flag16 = 0,
-                       stack_offset_from_X: flag = 0,
+    def __init__(self, value1_from_status_push_bits: flag1 = 0,
+                       value2_from_value1_bit6: flag1 = 0,
+                       A_from_value1: flag1 = 0,
+                       X_from_value1: flag1 = 0,
+                       Y_from_value1: flag1 = 0,
+                       program_counter_from_address: flag1 = 0,
+                       stack_offset_from_X: flag1 = 0,
                        value1_keep=1,
                        value1_from_A=0,
                        value1_from_X=0,
@@ -578,8 +642,8 @@ class Region_Rewire(Region):
                 'stack_offset_from_X']
 
 class Region_ImplementationState(Region):
-    def __init__(self, store_write_from_value1: flag = 0,
-                       value1_read_from_store: flag = 0):
+    def __init__(self, store_write_from_value1: flag1 = 0,
+                       value1_read_from_store: flag1 = 0):
         self.store_write_from_value1 = store_write_from_value1
         self.value1_read_from_store = value1_read_from_store
 
@@ -589,15 +653,17 @@ class Region_ImplementationState(Region):
 
 
 class Region_Flags(Region):
-    def __init__(self, N_keep: flag = 1, N_adjust: unsigned_int = 0, N_adjust_source: unsigned_int = Wire.NULL,
-                       O_keep: flag = 1, O_adjust: unsigned_int = 0, O_adjust_direct: unsigned_int = Wire.NULL,
+    def __init__(self, N_keep: flag1 = 1, N_adjust: flag1 = 0, N_adjust_source: flag1 = Wire.NULL,
+                       O_keep: flag1 = 1, O_adjust: flag1 = 0, O_adjust_direct: flag1 = Wire.NULL,
                        U_keep=1, U_adjust=0,
                        B_keep=1, B_adjust=0,
-                       D_keep: flag = 1, D_adjust: unsigned_int = 0,
-                       I_keep: flag = 1, I_adjust: unsigned_int = 0,
-                       Z_keep: flag = 1, Z_adjust: unsigned_int = 0, Z_adjust_source: unsigned_int = Wire.NULL,
-                       C_keep: flag = 1, C_adjust: unsigned_int = 0, C_adjust_direct: unsigned_int = Wire.NULL,
-                       set_byte_from_value1: flag = 0):
+                       D_keep: flag1 = 1, D_adjust: flag1 = 0,
+                       I_keep: flag1 = 1, I_adjust: flag1 = 0,
+                       Z_keep: flag1 = 1, Z_adjust: flag1 = 0, Z_adjust_source: flag1 = Wire.NULL,
+                       C_keep: flag1 = 1, C_adjust: flag1 = 0, C_adjust_direct: flag1 = Wire.NULL,
+                       set_byte_from_value1: flag1 = 0,
+                       # any: flag1 = 0
+                       ):
 
         self.N_keep, self.N_adjust = N_keep, N_adjust
         self.O_keep, self.O_adjust = O_keep, O_adjust
@@ -614,6 +680,24 @@ class Region_Flags(Region):
         self.C_adjust_direct = C_adjust_direct
 
         self.set_byte_from_value1 = set_byte_from_value1
+
+        self.any = 1*(
+                    (N_keep != 1) or
+                    (O_keep != 1) or
+                    (D_keep != 1) or
+                    (I_keep != 1) or
+                    (Z_keep != 1) or
+                    (C_keep != 1) or
+                    (N_adjust_source) or
+                    (O_adjust_direct) or
+                    (Z_adjust_source) or
+                    (C_adjust_direct) or
+                    (N_adjust)    or
+                    (O_adjust)    or
+                    (D_adjust)    or
+                    (I_adjust)    or
+                    (Z_adjust)    or
+                    (C_adjust))
 
     def transition(self, state, computation_state):
         N_value = ((self.N_adjust_source == 1)*computation_state.value1 +
@@ -652,11 +736,12 @@ class Region_Flags(Region):
                 'I_keep', 'I_adjust',
                 'Z_keep', 'Z_adjust', 'Z_adjust_source',
                 'C_keep', 'C_adjust', 'C_adjust_direct',
-                'set_byte_from_value1']
+                'set_byte_from_value1',
+                'any']
 
 class Region_Write(Region):
-    def __init__(self, memory_write_value1: flag16 = 0,
-                       oam_memory_write_value1: flag16 = 0):
+    def __init__(self, memory_write_value1: flag1 = 0,
+                       oam_memory_write_value1: flag1 = 0):
         self.memory_write_value1 = memory_write_value1
         self.oam_memory_write_value1 = oam_memory_write_value1
 
@@ -669,7 +754,7 @@ class Region_Write(Region):
                 'oam_memory_write_value1']
 
 class Region_StackWrite(Region):
-    def __init__(self, stack_write_value1: flag16 = 0,
+    def __init__(self, stack_write_value1: flag1 = 0,
                        stack_offset_post_adjust: signed_int = 0):
         self.stack_write_value1 = stack_write_value1
         self.stack_offset_post_adjust = stack_offset_post_adjust
@@ -681,7 +766,7 @@ class Region_StackWrite(Region):
         state.stack_offset += self.stack_offset_post_adjust
 
     def args_OK(self):
-        return ['stack_write_value1', 'stack_offset_post_adjust']
+        return ['stack_write_value1'] #, 'stack_offset_post_adjust']
 
 class Region_ProgramCounter(Region):
     def __init__(self, PC_increment: unsigned_int = 0):

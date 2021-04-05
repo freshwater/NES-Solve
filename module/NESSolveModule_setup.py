@@ -11,6 +11,8 @@ class build_ext(setuptools.command.build_ext.build_ext):
                                '-Xcompiler', '-fPIC',
                                '-Xcompiler', '-I../src',
                                '-Xcompiler', '-I../generated',
+                               # '--maxrregcount=62',
+                               '--ptxas-options=-v',
                                # '-Xcompiler', '-pthread',
                                # '-Xcompiler="-B/home/amr/anaconda3/compiler_compat"',
                                # '-Xptxas', '-O0',

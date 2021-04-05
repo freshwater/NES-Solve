@@ -808,7 +808,9 @@ if __name__ == '__main__':
     operations = []
     operation_info = []
 
-    operations_begin = """__device__\nconst RegionComposition instructions[] = {\n    """
+    switch_cases = []
+
+    operations_begin = """__device__\n__constant__\nconst RegionComposition instructions[] = {\n    """
     operations_end = "\n};"
     operation_info_begin = """OperationInformation operation_info[] = {\n    """
     operation_info_end = """\n};"""
@@ -915,16 +917,24 @@ if __name__ == '__main__':
             operations.append(f'/*0x{opcode:02X}*//*{name}*/{region.struct(wire_region=wire, byte_count=pc_increment)}')
             operation_info.append(f'/*0x{opcode:02X}*//*{name}*/OperationInformation{{.name="{name}", .byte_count={byte_count}, .format_type="{format_types[addressing]}"}}')
 
+            switch_cases.append(f'case 0x{opcode:02X}/*{name}*/: {region.struct(wire_region=wire, byte_count=pc_increment)}.transition(system, state); break;')
+
         else:
             operations.append(f'/*0x{opcode:02X}*//*NOP*/RegionComposition{{}}')
             operation_info.append(f'/*0x{opcode:02X}*//*NOP*/OperationInformation{{}}')
 
+            switch_cases.append(f'case 0x{opcode:02X}/*NOP*/: RegionComposition{{}}.transition(system, state); break;')
+
     operations_text = operations_begin + ',\n    '.join(operations) + operations_end
     operation_info_text = operation_info_begin + ',\n    '.join(operation_info) + operation_info_end
+
+    switch_statement = 'switch (state->opcode) {\n' + "\n".join(switch_cases) + "\n}";
 
     import sys
     with open(sys.argv[1], 'w') as file:
         file.write('\n' + operations_text + '\n\n' + operation_info_text + '\n')
+        # file.write(switch_statement)
+
 
     exit(0)
 

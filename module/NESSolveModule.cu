@@ -8,24 +8,15 @@
 #include <chrono>
 
 #define DO_SOFTWARE true
-#define MAXFRAMES (60*2)
 #define OBSERVED_INSTANCE 7
 #define FRAMEDATA_SIZE 256*240
 // #define DEBUG 1
 
-typedef const uint8_t flag_t;
-typedef const uint16_t flag16_t;
-typedef const uint8_t int_t;
-typedef const int8_t int_signed_t;
 typedef uint16_t int16u_t;
 typedef uint8_t int8u_t;
-typedef uint8_t bit_t;
 
 struct SystemState;
 struct ComputationState;
-
-__device__
-void operationTransition(uint8_t, SystemState*, ComputationState*);
 
 #include "states.h"
 #include "regions.h"
@@ -33,69 +24,90 @@ void operationTransition(uint8_t, SystemState*, ComputationState*);
 #include "utilities.h"
 
 __device__
-void operationTransition(uint8_t opcode, SystemState* state, ComputationState* computation_state) {
-    instructions[opcode].transition(state, computation_state);
+void operationTransition(uint8_t opcode, SystemState* system, ComputationState* state, Memory& memory) {
+    instructions[opcode].transition(system, state, memory);
 }
 
 namespace NESSolveModule {
     __global__
-    void add(SystemState* states)
+    __launch_bounds__(32) // , minBlocksPerMultiprocessor)
+    void add(SystemState* systems, uint8_t* actions, int num_actions)
     {
-        ComputationState computation_state;
-        computation_state.program_counter = states[threadIdx.x].program_counter_initial;
-        computation_state.stack_offset = states[threadIdx.x].stack_offset_initial;
+        int instance_index = blockIdx.x*(blockDim.x) + threadIdx.x;
 
-        while (computation_state.frame_count < MAXFRAMES) {
-            states[threadIdx.x].next(&computation_state);
+        ComputationState state;
+        state.program_counter = systems[instance_index].program_counter_initial;
+        state.stack_offset = systems[instance_index].stack_offset_initial;
+        state.num_actions = num_actions;
+
+        Memory memory;
+        for (int i = 0; i < sizeof(Memory); i++) {
+            memory.array[i] = systems[instance_index].global_memory.array[i];
         }
 
-        if (threadIdx.x == OBSERVED_INSTANCE) {
-            printf("FrameCount(%d)\n", computation_state.frame_count);
-            printf("NMI(%d)\n", computation_state.nmi_count);
+        while (state.frame_count < num_actions) {
+            int frame_index = state.frame_count*(gridDim.x * blockDim.x) +
+                              blockIdx.x*(blockDim.x) +
+                              threadIdx.x;
+
+            state.control_port1 = actions[frame_index];
+            systems[instance_index].next(&state, memory);
         }
     }
 
-    void run(const unsigned char* file_location, int file_location_size, char* frames_red_out)
+    void run(const unsigned char* file_location, int file_location_size,
+             char* _actions, int num_instances, int num_actions, int num_blocks,
+             char* frames_red_out)
     {
-        int num_states = 15;
-        int num_trace_lines = 0;
-        SystemState *states;
+        SystemState *systems;
+        uint8_t* program_data;
+        uint8_t* actions;
         uint8_t* frames_red;
         uint8_t* frames_green;
         uint8_t* frames_blue;
 
-        cudaMallocManaged(&states, num_states*sizeof(SystemState));
-        cudaMallocManaged(&frames_red, FRAMEDATA_SIZE);
-        cudaMallocManaged(&frames_green, FRAMEDATA_SIZE);
-        cudaMallocManaged(&frames_blue, FRAMEDATA_SIZE);
+        cudaMallocManaged(&systems, num_instances*sizeof(SystemState));
+        cudaMallocManaged(&program_data, 0x10000);
+        cudaMallocManaged(&actions, num_instances*sizeof(SystemState));
+        cudaMallocManaged(&frames_red, num_instances*FRAMEDATA_SIZE);
+        cudaMallocManaged(&frames_green, num_instances*FRAMEDATA_SIZE);
+        cudaMallocManaged(&frames_blue, num_instances*FRAMEDATA_SIZE);
 
         std::string file((char *)file_location, file_location_size);
-        std::vector<char> program_data = romFileRead(file).first;
+        std::vector<char> program_data1 = romFileRead(file).first;
         std::vector<char> character_data = romFileRead(file).second;
+
+        printf("\nRegionComposition(%d)\n", sizeof(RegionComposition));
+        printf("instructions(%d)\n\n", sizeof(instructions));
 
         auto mark1 = std::chrono::high_resolution_clock::now();
 
-        for (int i = 0; i < num_states; i++) {
-            states[i] = SystemState(program_data, character_data);
+        for (int i = 0; i < num_instances; i++) {
+            systems[i] = SystemState(program_data1, character_data);
+            systems[i].program_data = program_data;
+            systems[i].frames_red = frames_red;
+            systems[i].frames_green = frames_green;
+            systems[i].frames_blue = frames_blue;
         }
+        std::copy(program_data1.begin(), program_data1.end(), program_data);
+        memcpy(actions, _actions, num_instances*num_actions);
 
         auto mark2 = std::chrono::high_resolution_clock::now();
 
-        states[OBSERVED_INSTANCE].frames_red = frames_red;
-        states[OBSERVED_INSTANCE].frames_green = frames_green;
-        states[OBSERVED_INSTANCE].frames_blue = frames_blue;
+        int num_threads_per_block = num_instances / num_blocks;
 
-        add<<<1, num_states>>>(states);
+        printf("<<<%d, %d>>>(%d, _, %d)\n", num_blocks, num_threads_per_block, num_instances, num_actions);
+        add<<<num_blocks, num_threads_per_block>>>(systems, actions, num_actions);
         cudaDeviceSynchronize();
 
         auto mark3 = std::chrono::high_resolution_clock::now();
         std::cout << "\nstates> " << std::chrono::duration_cast<std::chrono::microseconds>(mark2 - mark1).count();
-        std::cout << "\n   add> " << std::chrono::duration_cast<std::chrono::microseconds>(mark3 - mark2).count();
         std::cout << "\n total> " << std::chrono::duration_cast<std::chrono::microseconds>(mark3 - mark1).count() << std::endl;
+        std::cout << "\n   add> " << std::chrono::duration_cast<std::chrono::microseconds>(mark3 - mark2).count();
 
-        memcpy(frames_red_out, frames_red, FRAMEDATA_SIZE);
+        memcpy(frames_red_out, frames_red, num_instances*FRAMEDATA_SIZE);
 
-        cudaFree(&states);
+        cudaFree(&systems);
         cudaFree(&frames_red);
         cudaFree(&frames_green);
         cudaFree(&frames_blue);

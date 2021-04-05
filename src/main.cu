@@ -34,51 +34,39 @@ typedef uint8_t bit_t;
 struct SystemState;
 struct ComputationState;
 
-__device__
-void operationTransition(uint8_t, SystemState*, ComputationState*);
-
 #include "states.h"
 #include "regions.h"
 #include "_instructions.h"
 #include "utilities.h"
 
 __device__
-void operationTransition(uint8_t opcode, SystemState* state, ComputationState* computation_state) {
-    instructions[opcode].transition(state, computation_state);
+void operationTransition(uint8_t opcode, SystemState* state, ComputationState* computation_state, Memory& memory) {
+    instructions[opcode].transition(state, computation_state, memory);
 }
 
 /* */
 
 __global__
-void add(uint32_t num_instructions, SystemState *states)
+void add(SystemState* systems, int num_instructions)
 {
-    ComputationState computation_state;
-    computation_state.program_counter = states[threadIdx.x].program_counter_initial;
-    computation_state.stack_offset = states[threadIdx.x].stack_offset_initial;
+    int instance_index = blockIdx.x*(blockDim.x) + threadIdx.x;
+
+    ComputationState state;
+    state.program_counter = systems[instance_index].program_counter_initial;
+    state.stack_offset = systems[instance_index].stack_offset_initial;
+
+    Memory memory;
+    for (int i = 0; i < sizeof(Memory); i++) {
+        memory.array[i] = systems[instance_index].global_memory.array[i];
+    }
+
+    systems[instance_index].program_data = &memory.cartridge_memory[0];
 
     for (int i = 0; i < num_instructions; i++) {
-        if (30*4 < computation_state.frame_count && computation_state.frame_count < 30*5 + 10) {
-            states[threadIdx.x].memory.control_port1[0] = 0x10;
-        } else if (30*21 <= computation_state.frame_count && computation_state.frame_count < 30*22) {
-            states[threadIdx.x].memory.control_port1[0] = 0x01;
-        } else if (30*22 <= computation_state.frame_count && computation_state.frame_count < 30*23) {
-            states[threadIdx.x].memory.control_port1[0] = 0x81;
-        } else {
-            states[threadIdx.x].memory.control_port1[0] = 0x00;
-        }
-
-        states[threadIdx.x].next(&computation_state);
-
-        if (computation_state.frame_count == MAXFRAMES) {
-            break;
-        }
-    }
-
-    if (threadIdx.x == OBSERVED_INSTANCE) {
-        printf("FrameCount(%d)\n", computation_state.frame_count);
-        printf("NMI(%d)\n", computation_state.nmi_count);
+        systems[instance_index].next(&state, memory);
     }
 }
+
 
 /* */
 
@@ -111,7 +99,7 @@ int tests(void)
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    add<<<1, num_states>>>(num_instructions, states);
+    add<<<1, num_states>>>(states, num_instructions);
     cudaDeviceSynchronize();
 
     auto stop = std::chrono::high_resolution_clock::now();
@@ -208,7 +196,7 @@ int software(void)
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    add<<<1, num_states>>>(num_instructions, states);
+    add<<<1, num_states>>>(states, num_instructions);
     cudaDeviceSynchronize();
 
     auto stop = std::chrono::high_resolution_clock::now();

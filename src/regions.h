@@ -67,7 +67,7 @@ struct Region_Wire {
                                        (0x00FF&(state->data1 + state->X))*value1_from_zeropage_x_dereference +
                                        (0x00FF&(state->data1 + state->Y))*value1_from_zeropage_y_dereference);
 
-            state->value1 = memory.read(address_dereference, system->program_data, state);
+            state->value1 = memory.read(address_dereference, state);
         } else {
             state->value1 = ((state->data1)*value1_from_data1 +
                              (state->stack_offset)*value1_from_stack_offset +
@@ -116,16 +116,25 @@ struct Region_Compare {
 struct Behaviors {
     __device__
     static int8u_t special_status_bits_on_push(int8u_t status_register, flag_t is_PHP_or_BRK) {
+        /*
+        https://wiki.nesdev.com/w/index.php/Status_flags#The_B_flag
+        Two interrupts (/IRQ and /NMI) and two instructions (PHP and BRK)
+        push the flags to the stack. In the byte pushed, bit 5 is always
+        set to 1, and bit 4 is 1 if from an instruction (PHP or BRK) or 0
+        if from an interrupt line being pulled low (/IRQ or /NMI). This is
+        the only time and place where the B flag actually exists: not in
+        the status register itself, but in bit 4 of the copy that is
+        written to the stack. */
         return status_register | 0x20 | 0x10*is_PHP_or_BRK;
     }
 
     __device__
-    static int8u_t special_status_bits_on_pull(int8u_t current_status_register, int8u_t data, flag_t is_PLP_or_RTI) {
-        int8u_t bits = current_status_register & 0x30;
-        data &= (0xFF - 0x30);
-        data |= bits;
-
-        return is_PLP_or_RTI ? (data) : current_status_register;
+    static int8u_t special_status_bits_on_pull(int8u_t current_status_register, int8u_t data) {
+        /*
+        https://wiki.nesdev.com/w/index.php/Status_flags#The_B_flag
+        Two instructions (PLP and RTI) pull a byte from the stack and set all
+        the flags. They ignore bits 5 and 4. */
+        return (data & ~0x30) | (current_status_register & 0x30);
     }
 };
 
@@ -138,8 +147,7 @@ struct Region_StackRead {
         state->stack_offset += value1_from_stack_read;
 
         state->value1 = value1_from_stack_read ? (memory[STACK_ZERO | state->stack_offset]) : state->value1;
-        int8u_t special_status_bits = Behaviors::special_status_bits_on_pull(state->statusRegisterByteGet(),
-                                                                             state->value1, read_special_status_bits);
+        int8u_t special_status_bits = Behaviors::special_status_bits_on_pull(state->statusRegisterByteGet(), state->value1);
         state->value1 = read_special_status_bits ? (special_status_bits) : state->value1;
     }
 };
@@ -203,17 +211,18 @@ struct Region_ADC_SBC {
 
     __device__
     void transition(SystemState* system, ComputationState* state, Memory& memory) const {
-        int8u_t value1 = value1_from_SBC ? ~(state->value1) : state->value1;
-        int16u_t result = state->A + value1 + state->C;
-        int8u_t carry = result > 0xFF;
-        result &= 0xFF;
+        if (value1_from_ADC | value1_from_SBC) {
+            int8u_t value1 = value1_from_SBC ? ~(state->value1) : state->value1;
+            int16u_t result = state->A + value1 + state->C;
+            int8u_t carry = result > 0xFF;
+            result &= 0xFF;
 
-        int8u_t overflow = (~(state->A ^ value1) & (state->A ^ result) & 0x80) > 0;
+            int8u_t overflow = (~(state->A ^ value1) & (state->A ^ result) & 0x80) > 0;
 
-        flag_t any_ = value1_from_ADC | value1_from_SBC;
-        state->value1 = any_ ? (result) : state->value1;
-        state->value2 = any_ ? (overflow) : state->value2;
-        state->value3 = any_ ? (carry) : state->value3;
+            state->value1 = result;
+            state->value2 = overflow;
+            state->value3 = carry;
+        }
     }
 };
 
@@ -302,8 +311,9 @@ struct Region_Write {
 
     __device__
     void transition(SystemState* system, ComputationState* state, Memory& memory) const {
-        int address = (memory_write_value1 | oam_memory_write_value1) ? state->address : NULL_ADDRESS_WRITE;
-        memory.write(address, state->value1, oam_memory_write_value1, state);
+        if (memory_write_value1 | oam_memory_write_value1) {
+            memory.write(state->address, state->value1, oam_memory_write_value1, state);
+        }
     }
 };
 
@@ -314,7 +324,6 @@ struct Region_StackWrite {
     void transition(SystemState* system, ComputationState* state, Memory& memory) const {
         int address = stack_write_value1 ? (STACK_ZERO | state->stack_offset) : NULL_ADDRESS_WRITE;
         memory[address] = state->value1;
-
         state->stack_offset -= stack_write_value1;
     }
 };

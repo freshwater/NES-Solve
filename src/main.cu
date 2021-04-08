@@ -8,25 +8,22 @@
 #include <chrono>
 
 #define DO_SOFTWARE true
-#define MAXFRAMES (60*11 + 30)
-#define OBSERVED_INSTANCE 7
+#define MAXFRAMES (60*1 + 30)
+#define NUM_INSTRUCTIONS 1000000
+#define OBSERVED_INSTANCE 0
 #define FRAMEDATA_SIZE 256*240
 // #define DEBUG 1
 
-#define SOFTWARE "Donkey Kong.nes"
+// #define SOFTWARE "Donkey Kong.nes"
 // #define SOFTWARE "nestest.nes"
 // #define SOFTWARE "01-basics.nes"
 // #define SOFTWARE "digdug.nes"
 // #define SOFTWARE "Spy vs Spy (USA).nes"
 // #define SOFTWARE "Bubble Bobble (U).nes"
-// #define SOFTWARE "Super Mario Bros..nes"
+#define SOFTWARE "Super Mario Bros..nes"
 // #define SOFTWARE "Mario Bros (JU).nes"
 // #define SOFTWARE "Spelunker (USA).nes"
 
-typedef const uint8_t flag_t;
-typedef const uint16_t flag16_t;
-typedef const uint8_t int_t;
-typedef const int8_t int_signed_t;
 typedef uint16_t int16u_t;
 typedef uint8_t int8u_t;
 typedef uint8_t bit_t;
@@ -59,8 +56,6 @@ void add(SystemState* systems, int num_instructions)
     for (int i = 0; i < sizeof(Memory); i++) {
         memory.array[i] = systems[instance_index].global_memory.array[i];
     }
-
-    systems[instance_index].program_data = &memory.cartridge_memory[0];
 
     for (int i = 0; i < num_instructions; i++) {
         systems[instance_index].next(&state, memory);
@@ -154,15 +149,12 @@ int tests(void)
 int software(void)
 {
     int num_states = 15;
-    int num_trace_lines = 0;
+    int num_trace_lines = 1000000;
     SystemState *states;
     Trace *trace_lines;
     uint8_t* frames_red;
     uint8_t* frames_green;
     uint8_t* frames_blue;
-
-    uint64_t num_instructions = 100000000;
-    // std::cin >> num_instructions;
 
     std::cout << "\n[]\n\n" << std::endl;
 
@@ -196,29 +188,29 @@ int software(void)
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    add<<<1, num_states>>>(states, num_instructions);
+    add<<<1, num_states>>>(states, NUM_INSTRUCTIONS);
     cudaDeviceSynchronize();
 
     auto stop = std::chrono::high_resolution_clock::now();
     std::cout << "\n> " << std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count() << "\n\n";
 
-    std::vector<char> data1(std::begin(states[OBSERVED_INSTANCE].memory.ppu_memory), std::end(states[OBSERVED_INSTANCE].memory.ppu_memory));
-    std::vector<char> data2(std::begin(states[OBSERVED_INSTANCE].memory.ppu_OAM_memory), std::end(states[OBSERVED_INSTANCE].memory.ppu_OAM_memory));
+    // std::vector<char> data1(std::begin(states[OBSERVED_INSTANCE].memory.ppu_memory), std::end(states[OBSERVED_INSTANCE].memory.ppu_memory));
+    // std::vector<char> data2(std::begin(states[OBSERVED_INSTANCE].memory.ppu_OAM_memory), std::end(states[OBSERVED_INSTANCE].memory.ppu_OAM_memory));
 
-    std::vector<char> data3(FRAMEDATA_SIZE);
-    std::vector<char> data4(FRAMEDATA_SIZE);
-    std::vector<char> data5(FRAMEDATA_SIZE);
-    memcpy(data3.data(), frames_red, FRAMEDATA_SIZE);
-    memcpy(data4.data(), frames_green, FRAMEDATA_SIZE);
-    memcpy(data5.data(), frames_blue, FRAMEDATA_SIZE);
+    // std::vector<char> data3(FRAMEDATA_SIZE);
+    // std::vector<char> data4(FRAMEDATA_SIZE);
+    // std::vector<char> data5(FRAMEDATA_SIZE);
+    // memcpy(data3.data(), frames_red, FRAMEDATA_SIZE);
+    // memcpy(data4.data(), frames_green, FRAMEDATA_SIZE);
+    // memcpy(data5.data(), frames_blue, FRAMEDATA_SIZE);
 
-    imageWrite(data1, data2, data3, data4, data5);
+    // imageWrite(data1, data2, data3, data4, data5);
 
     /* */
 
     #ifdef DEBUG
 
-    std::cout << "\n";
+    std::cout << states[OBSERVED_INSTANCE].trace_lines_index << "\n";
 
     for (int i = 0; i < states[OBSERVED_INSTANCE].trace_lines_index; i++) {
         std::cout << std::hex << std::setw(2) << std::setfill('0') << std::uppercase << i << " ";

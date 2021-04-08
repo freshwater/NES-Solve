@@ -41,17 +41,18 @@ struct ComputationState {
 
     int16u_t address;
 
-    volatile int8u_t store;
+    int8u_t store;
     int8u_t ppu_status;
 
-    int8u_t controller_read_position = 0;
-    int frame_count = 0;
-    int num_actions = 0;
+    int controller_read_position = 0;
 
-    int16_t vertical_scan = 0;
-    int16_t horizontal_scan = 21 - 3;
-    uint32_t ppu_cycle = 21 - 3;
-    int16u_t instruction_countdown = 1;
+    int vertical_scan = 0;
+    int horizontal_scan = 21 - 3;
+    int instruction_countdown = 1;
+
+    int64_t ppu_cycle = 21 - 3;
+    int64_t frame_count = 0;
+    int64_t num_actions = 0;
 
     struct Sprite {
         int8u_t Y;
@@ -68,6 +69,7 @@ struct ComputationState {
     uint32_t sprite_palette_bit1_line[9];
     uint32_t sprite_palette_bit0_line[9];
     uint32_t sprite_zero_line[9];
+    bool sprite_zero_hit_possible;
     bool has_sprite_zero_hit;
     int sprites_intersecting_index = 0;
 
@@ -96,7 +98,6 @@ struct ComputationState {
 
     bool has_blanked = false;
     bool has_vblank_nmi = false;
-    int nmi_count = 0;
 
     uint8_t control_port1;
 
@@ -107,9 +108,6 @@ struct ComputationState {
     }
 
 };
-
-#define PPU_CTRL    0x2000
-#define PPU_STATUS  0x2002
 
 #define NOP_instruction         0x6B
 #define NMI_instruction         0xC2
@@ -122,7 +120,8 @@ struct ComputationState {
 #define CARTRIDGE_MEMORY   (PPU_MEMORY + 0x4000)
 #define PPU_OAM_REGISTER   (CARTRIDGE_MEMORY + 0x8000)
 #define CONTROL_PORT_1     (PPU_OAM_REGISTER + 1)
-#define PPU_OAM_MEMORY     (CONTROL_PORT_1 + 1)
+#define CONTROL_PORT_2     (CONTROL_PORT_1 + 1)
+#define PPU_OAM_MEMORY     (CONTROL_PORT_2 + 1)
 #define NULL_ADDRESS_READ_OFFSET (PPU_OAM_MEMORY + 0x100)
 #define NULL_ADDRESS_WRITE_OFFSET (NULL_ADDRESS_READ_OFFSET + 2)
 
@@ -137,6 +136,7 @@ struct Memory {
     int8u_t cartridge_memory[0x8000] = {};
     int8u_t ppu_OAM_register[1] = {};
     int8u_t control_port1[1] = {};
+    int8u_t control_port2[1] = {};
     int8u_t ppu_OAM_memory[0x100] = {};
     int8u_t null_address_read[2] = {};
     int8u_t null_address_write[2] = {};
@@ -149,7 +149,8 @@ struct Memory {
                  (PPU_OAM_REGISTER)*(0x4014 == index) +
         (NULL_ADDRESS_WRITE_OFFSET)*(0x4015 == index) +
                    (CONTROL_PORT_1)*(0x4016 == index) +
-        (NULL_ADDRESS_WRITE_OFFSET)*(0x4017 <= index && index < 0x8000) +
+                   (CONTROL_PORT_2)*(0x4017 == index) +
+        (NULL_ADDRESS_WRITE_OFFSET)*(0x4018 <= index && index < 0x8000) +
                  (CARTRIDGE_MEMORY)*(0x8000 <= index && index < 0x10000) +
          (NULL_ADDRESS_READ_OFFSET)*(NULL_ADDRESS_READ == index) +
         (NULL_ADDRESS_WRITE_OFFSET)*(NULL_ADDRESS_WRITE == index);
@@ -157,51 +158,84 @@ struct Memory {
 
     __device__
     int mapIndex(int offset, int index) {
-        return        (index % 0x800)*(CPU_MEMORY       == offset) +
-               ((index - 0x2000) % 8)*(PPU_REGISTERS    == offset) +
-                                  (0)*(PPU_OAM_REGISTER == offset) +
-                     (index - 0x8000)*(CARTRIDGE_MEMORY == offset);
+        return    (index & 0x7FF)*(CPU_MEMORY       == offset) +
+           ((index - 0x2000) & 7)*(PPU_REGISTERS    == offset) +
+                              (0)*(PPU_OAM_REGISTER == offset) +
+                              (0)*(CONTROL_PORT_1   == offset) +
+                              (0)*(PPU_OAM_REGISTER == offset) +
+                 (index - 0x8000)*(CARTRIDGE_MEMORY == offset) +
+                              (0)*(NULL_ADDRESS_READ_OFFSET  == offset) +
+                              (0)*(NULL_ADDRESS_WRITE_OFFSET == offset);
     }
 
     __device__
-    __inline__
     int8u_t& ppuMemoryMapped(int index) {
         return ppu_memory[ppuMapAddress(index)];
     }
 
     __device__
-    int8u_t read(int index0, uint8_t* program_data, ComputationState* state) {
+    int8u_t ppuPaletteRead(int index) {
+        index &= 0x1F;
+        bool any_palette_background = ((index & 0x03) == 0);
+        index = any_palette_background ? 0 : index;
+
+        return ppu_memory[0x3F00 + index];
+    }
+
+    __device__
+    int16u_t ppuMapAddress(int16u_t address) {
+        bool is_palette_address = (0x3F00 <= address);
+        address = is_palette_address ? (0x3F00 | (address & 0x001F)) : address;
+
+        /*
+        http://wiki.nesdev.com/w/index.php/PPU_palettes#Memory_Map
+        Addresses $3F00/$3F04/$3F08/$3F0C are mirrored by $3F10/$3F14/$3F18/$3F1C. */
+        /* Aside from the mirroring, the read/write works as normal for the CPU,
+           but the PPU render circuit reads these from $3F00 (see ppuPaletteRead). */
+
+        bool any_palette_mirror = (0x3F10 <= address && ((address & 0x03) == 0));
+        bool is_nametable_mirror_region1 = (0x2800 <= address && address < 0x2C00);
+        bool is_nametable_mirror_region2 = (0x2C00 <= address && address < 0x3000);
+
+        address = is_nametable_mirror_region1 ? (address - 0x800) : address;
+        address = is_nametable_mirror_region2 ? (address - 0x800) : address;
+
+        address = any_palette_mirror ? (address - 0x0010) : address;
+
+        return address;
+    }
+
+    __device__
+    int8u_t read(int index0, ComputationState* state) {
         int offset = mapOffset(index0);
         int index = mapIndex(offset, index0);
+        int16u_t address = offset + index;
 
-        /* PPU data pre read */
         bool is_ppu_data_read = (offset == PPU_REGISTERS) && (index == 0x07);
         int16u_t ppu_address = ((state->ppu_address_H << 8) | state->ppu_address_L);
-        int16u_t address = offset + index;
-        address = (address)*(!is_ppu_data_read) + (PPU_MEMORY + ppuMapAddress(ppu_address))*is_ppu_data_read;
+        address = is_ppu_data_read ? (PPU_MEMORY + ppuMapAddress(ppu_address)) : address;
 
-        int8u_t value = array[address];
+        int value = array[address];
 
-        /* PPU data buffer */
-        bool is_ppu_buffered_read = is_ppu_data_read && (ppu_address < 0x3F00);
-        bool is_ppu_immediate_read = is_ppu_data_read && (ppu_address >= 0x3F00);
-        int8u_t buffer_temp = state->ppu_data_buffer;
-        state->ppu_data_buffer = (state->ppu_data_buffer)*(!is_ppu_data_read) + (value)*(is_ppu_data_read);
-        value = (value)*(!is_ppu_data_read) + (value)*is_ppu_immediate_read + (buffer_temp)*is_ppu_buffered_read;
+        if (is_ppu_data_read) {
+            bool is_ppu_buffered_read = ppu_address < 0x3F00;
+            int8u_t buffer_temp = state->ppu_data_buffer;
+            state->ppu_data_buffer = value;
+            value = is_ppu_buffered_read ? buffer_temp : value;
 
-        /* PPU data post read */
-        int8u_t ppu_ctrl = ppu_registers[0x00];
-        ppu_address += (31*((ppu_ctrl >> 2) & 0x01) + 1)*(is_ppu_data_read);
-        state->ppu_address_H = ppu_address >> 8;
-        state->ppu_address_L = 0xFF & ppu_address;
+            int8u_t ppu_ctrl = ppu_registers[0x00];
+            ppu_address += (31*((ppu_ctrl >> 2) & 0x01) + 1);
+            state->ppu_address_H = ppu_address >> 8;
+            state->ppu_address_L = 0xFF & ppu_address;
+        }
 
-        bool is_2002_read = (offset == PPU_REGISTERS) && (index == 0x02);
-        value = (value)*(!is_2002_read) + (state->ppu_status)*is_2002_read;
-        state->ppu_status &= is_2002_read ? 0b01111111 : 0xFF;
-        state->ppu_address_latch = is_2002_read ? false : state->ppu_address_latch;
+        if ((offset == PPU_REGISTERS) && (index == 0x02)) {
+            value = state->ppu_status;
+            state->ppu_status &= 0b01111111;
+            state->ppu_address_latch = false;
+        }
 
-        bool is_controller_read = (offset == CONTROL_PORT_1) && (index == 0x00);
-        if (is_controller_read)
+        if (offset == CONTROL_PORT_1)
         {
             value = state->control_port1;
             value = ((value << state->controller_read_position) & 0x80) >> 7;
@@ -212,31 +246,6 @@ struct Memory {
 
             state->controller_read_position += 1;
         }
-
-        return value;
-    }
-
-    __device__
-    __inline__
-    int16u_t ppuMapAddress(int16u_t address) {
-        bool is_palette_address = (0x3F00 <= address);
-        address = (address)*(!is_palette_address) + (0x3F00 | (address & 0x001F))*is_palette_address;
-
-        /*
-        http://wiki.nesdev.com/w/index.php/PPU_palettes#Memory_Map
-        Addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C */
-        /* The underlying memory on these appears to be used only in rare/hacky situations.
-           For simplicity I've consolodated them all to $3F00 */
-
-        bool any_palette_background = (0x3F00 < address && ((address & 0x03) == 0));
-        bool is_nametable_mirror_region1 = (0x2800 <= address && address < 0x2C00);
-        bool is_nametable_mirror_region2 = (0x2C00 <= address && address < 0x3000);
-
-        address = (address)*(!is_nametable_mirror_region1) + (address - 0x800)*(is_nametable_mirror_region1);
-        address = (address)*(!is_nametable_mirror_region2) + (address - 0x800)*(is_nametable_mirror_region2);
-
-        auto value =  (address)*(!any_palette_background) +
-                       (0x3F00)*(any_palette_background);
 
         return value;
     }
@@ -275,20 +284,20 @@ struct Memory {
 
         state->ppu_status = (state->ppu_status)*(!is_2002_write) + value*is_2002_write;
 
-        int16u_t value16 = (int16u_t) value;
-        state->loopy_T = (state->loopy_T)*(!is_2000_write)  + ((state->loopy_T &   (         ~0b00000000'00000011  << 10))
-                                                                               |  ((value16 & 0b00000000'00000011) << 10))*is_2000_write; // nametable set
-        state->loopy_T = (state->loopy_T)*(!is_2005_write0) + ((state->loopy_T &   (         ~0b00000000'11111000  >>  3))
-                                                                               |  ((value16 & 0b00000000'11111000) >>  3))*is_2005_write0; // x scroll set
-        state->loopy_X = (state->loopy_X)*(!is_2005_write0) + (                   ((value16 & 0b00000000'00000111) >>  0))*is_2005_write0;
-        state->loopy_T = (state->loopy_T)*(!is_2005_write1) + ((state->loopy_T & ~((          0b00000000'00000111  << 12) |  (          0b00000000'11111000  << 2)))
-                                                                               |  ((value16 & 0b00000000'00000111) << 12) | ((value16 & 0b00000000'11111000) << 2))*is_2005_write1; // y scroll set
-        state->loopy_T = (state->loopy_T)*(!is_2006_write0) + (((state->loopy_T &  (         ~0b00000000'00111111  <<  8))
-                                                                                | ((value16 & 0b00000000'00111111) <<  8)) & 0b00111111'11111111)*is_2006_write0;
-        state->loopy_T = (state->loopy_T)*(!is_2006_write1) + ((state->loopy_T &   (         ~0b00000000'11111111  <<  0))
-                                                                               |  ((value16 & 0b00000000'11111111) <<  0))*is_2006_write1;
-        state->loopy_V = (state->loopy_V)*(!is_2006_write1) + (state->loopy_T)*is_2006_write1;
-        state->ppu_address_latch = (any_latch_write) ? !state->ppu_address_latch : state->ppu_address_latch;
+        /* https://wiki.nesdev.com/w/index.php/PPU_scrolling#Register_controls */
+        state->loopy_T = is_2000_write ?   ((state->loopy_T &  (        ~0b00000000'00000011  << 10))
+                                                            |  ((value & 0b00000000'00000011) << 10)) : state->loopy_T; // nametable set
+        state->loopy_T = is_2005_write0 ?  ((state->loopy_T &  (        ~0b00000000'11111000  >>  3))
+                                                            |  ((value & 0b00000000'11111000) >>  3)) : state->loopy_T; // x scroll set
+        state->loopy_X = is_2005_write0 ?  (                   ((value & 0b00000000'00000111) >>  0)) : state->loopy_X;
+        state->loopy_T = is_2005_write1 ?  ((state->loopy_T & ~((        0b00000000'00000111  << 12) | (         0b00000000'11111000  << 2)))
+                                                            |  ((value & 0b00000000'00000111) << 12) | ((value & 0b00000000'11111000) << 2)) : state->loopy_T; // y scroll set
+        state->loopy_T = is_2006_write0 ? (((state->loopy_T &  (        ~0b00000000'00111111  <<  8))
+                                                            |  ((value & 0b00000000'00111111) <<  8)) & 0b00111111'11111111) : state->loopy_T;
+        state->loopy_T = is_2006_write1 ?  ((state->loopy_T &  (        ~0b00000000'11111111  <<  0))
+                                                            |  ((value & 0b00000000'11111111) <<  0)) : state->loopy_T;
+        state->loopy_V = is_2006_write1 ? (state->loopy_T) : state->loopy_V;
+        state->ppu_address_latch = any_latch_write ? (!state->ppu_address_latch) : state->ppu_address_latch;
 
         /* PPU data post write */
         int8u_t ppu_ctrl = ppu_registers[0x00];
@@ -305,7 +314,9 @@ struct Memory {
         // state->dma_target_H = (state->dma_target_H)*(!is_OAM_address_write) + (PPU_OAM_OFFSET >> 8)*is_OAM_address_write;
         // state->dma_target_L = (state->dma_target_L)*(!is_OAM_address_write) + ((PPU_OAM_OFFSET & 0xFF) + value)*is_OAM_address_write;
 
-        state->controller_read_position = (state->controller_read_position)*(!is_controller_write) + (0)*is_controller_write;
+        if (is_controller_write) {
+            state->controller_read_position = 0;
+        }
     }
 
     __device__
@@ -332,8 +343,6 @@ struct SystemState {
     int16u_t program_counter_initial;
     Memory global_memory;
     int8u_t stack_offset_initial;
-
-    int8u_t* program_data;
 
     uint8_t* frames_red;
     uint8_t* frames_green;
@@ -381,35 +390,38 @@ struct SystemState {
 
     __device__
     static void pixelWrite(SystemState* system, ComputationState* state, Memory& memory) {
-        uint8_t bit1 = (state->background_sprite_MSB_shift_register >> (15 - state->loopy_X)) & 0x01;
-        uint8_t bit0 = (state->background_sprite_LSB_shift_register >> (15 - state->loopy_X)) & 0x01;
-        uint8_t color_bits = (bit1 << 1) | bit0;
+        int background_palette_bit1 = (state->background_palette_MSB_shift_register >> (15 - state->loopy_X)) & 0x01;
+        int background_palette_bit0 = (state->background_palette_LSB_shift_register >> (15 - state->loopy_X)) & 0x01;
+        int background_palette_bits = (background_palette_bit1 << 1) | background_palette_bit0;
 
-        uint8_t palette_bit1 = (state->background_palette_MSB_shift_register >> (15 - state->loopy_X)) & 0x01;
-        uint8_t palette_bit0 = (state->background_palette_LSB_shift_register >> (15 - state->loopy_X)) & 0x01;
-        uint8_t palette_bits = (palette_bit1 << 1) | palette_bit0;
+        int background_color_bit1 = (state->background_sprite_MSB_shift_register >> (15 - state->loopy_X)) & 0x01;
+        int background_color_bit0 = (state->background_sprite_LSB_shift_register >> (15 - state->loopy_X)) & 0x01;
+        int background_color_bits = (background_color_bit1 << 1) | background_color_bit0;
 
-        uint8_t sprite_bit1 =                  (state->sprite_MSB_line[state->horizontal_scan / 32] >> (31 - (state->horizontal_scan % 32))) & 0x01;
-        uint8_t sprite_bit0 =                  (state->sprite_LSB_line[state->horizontal_scan / 32] >> (31 - (state->horizontal_scan % 32))) & 0x01;
-        uint8_t sprite_palette_bit1 = (state->sprite_palette_bit1_line[state->horizontal_scan / 32] >> (31 - (state->horizontal_scan % 32))) & 0x01;
-        uint8_t sprite_palette_bit0 = (state->sprite_palette_bit0_line[state->horizontal_scan / 32] >> (31 - (state->horizontal_scan % 32))) & 0x01;
-        uint8_t sprite_color_bits = (sprite_bit1 << 1) | sprite_bit0;
-        uint8_t sprite_palette_bits = (sprite_palette_bit1 << 1) | sprite_palette_bit0;
+        int sprite_palette_bit1 = (state->sprite_palette_bit1_line[state->horizontal_scan / 32] >> (31 - (state->horizontal_scan % 32))) & 0x01;
+        int sprite_palette_bit0 = (state->sprite_palette_bit0_line[state->horizontal_scan / 32] >> (31 - (state->horizontal_scan % 32))) & 0x01;
+        int sprite_palette_bits = (sprite_palette_bit1 << 1) | sprite_palette_bit0;
 
-        palette_bits = (palette_bits)*(sprite_color_bits == 0) + (sprite_palette_bits)*(sprite_color_bits != 0);
-        color_bits = (color_bits)*(sprite_color_bits == 0) + (sprite_color_bits);
+        int sprite_color_bit1 = (state->sprite_MSB_line[state->horizontal_scan / 32] >> (31 - (state->horizontal_scan % 32))) & 0x01;
+        int sprite_color_bit0 = (state->sprite_LSB_line[state->horizontal_scan / 32] >> (31 - (state->horizontal_scan % 32))) & 0x01;
+        int sprite_color_bits = (sprite_color_bit1 << 1) | sprite_color_bit0;
+
+        int palette_bits = (background_palette_bits)*(sprite_color_bits == 0) + (sprite_palette_bits)*(sprite_color_bits != 0);
+        int color_bits = (background_color_bits)*(sprite_color_bits == 0) + (sprite_color_bits);
 
         if (state->frame_count == state->num_actions - 1) {
-            system->frames_red[system->frames_pixel_index*(gridDim.x*blockDim.x) + blockIdx.x*(blockDim.x) + threadIdx.x]   = colors[memory.ppuMemoryMapped(0x3F00 + 0x10*(sprite_color_bits != 0) + (palette_bits*4 + color_bits))*3 + 0];
-            system->frames_green[system->frames_pixel_index*(gridDim.x*blockDim.x) + blockIdx.x*(blockDim.x) + threadIdx.x] = colors[memory.ppuMemoryMapped(0x3F00 + 0x10*(sprite_color_bits != 0) + (palette_bits*4 + color_bits))*3 + 1];
-            system->frames_blue[system->frames_pixel_index*(gridDim.x*blockDim.x) + blockIdx.x*(blockDim.x) + threadIdx.x]  = colors[memory.ppuMemoryMapped(0x3F00 + 0x10*(sprite_color_bits != 0) + (palette_bits*4 + color_bits))*3 + 2];
+            int color_offset = memory.ppuPaletteRead(0x10*(sprite_color_bits != 0) + (palette_bits*4 + color_bits))*3;
+            int64_t instance_pixel_index = system->frames_pixel_index*(gridDim.x*blockDim.x) + blockIdx.x*(blockDim.x) + threadIdx.x;
+            system->frames_red[instance_pixel_index]   = colors[color_offset + 0];
+            system->frames_green[instance_pixel_index] = colors[color_offset + 1];
+            system->frames_blue[instance_pixel_index]  = colors[color_offset + 2];
 
             system->frames_pixel_index++;
         }
 
-        if (!state->has_sprite_zero_hit) {
-            uint8_t sprite_zero_bit = (state->sprite_zero_line[state->horizontal_scan / 32] >> (31 - (state->horizontal_scan % 32))) & 0x01;
-            if (sprite_zero_bit != 0 && color_bits != 0) {
+        if (state->sprite_zero_hit_possible && !state->has_sprite_zero_hit) {
+            int sprite_zero_bit = (state->sprite_zero_line[state->horizontal_scan / 32] >> (31 - (state->horizontal_scan % 32))) & 0x01;
+            if (sprite_zero_bit != 0 && background_color_bits != 0) {
                 state->ppu_status |= 0x40;
                 state->has_sprite_zero_hit = true;
             }
@@ -483,10 +495,13 @@ struct SystemState {
 
                     sprite_MSB_planes[state->sprites_intersecting_index] = memory.ppuMemoryMapped(address + 8);
                     sprite_LSB_planes[state->sprites_intersecting_index] = memory.ppuMemoryMapped(address);
-                    uint8_t MSB_reversed = (uint8_t)(__brev((uint32_t) sprite_MSB_planes[state->sprites_intersecting_index]) >> (32 - 8));
-                    uint8_t LSB_reversed = (uint8_t)(__brev((uint32_t) sprite_LSB_planes[state->sprites_intersecting_index]) >> (32 - 8));
-                    sprite_MSB_planes[state->sprites_intersecting_index] = (sprite_MSB_planes[state->sprites_intersecting_index])*(!is_flip_horizontally) + (MSB_reversed)*is_flip_horizontally;
-                    sprite_LSB_planes[state->sprites_intersecting_index] = (sprite_LSB_planes[state->sprites_intersecting_index])*(!is_flip_horizontally) + (LSB_reversed)*is_flip_horizontally;
+
+                    if (is_flip_horizontally) {
+                        uint8_t MSB_reversed = (uint8_t)(__brev((uint32_t) sprite_MSB_planes[state->sprites_intersecting_index]) >> (32 - 8));
+                        uint8_t LSB_reversed = (uint8_t)(__brev((uint32_t) sprite_LSB_planes[state->sprites_intersecting_index]) >> (32 - 8));
+                        sprite_MSB_planes[state->sprites_intersecting_index] = MSB_reversed;
+                        sprite_LSB_planes[state->sprites_intersecting_index] = LSB_reversed;
+                    }
 
                     sprite_palette_bit1s[state->sprites_intersecting_index] = 0xFF*((state->sprites[i].attributes >> 1) & 0x01);
                     sprite_palette_bit0s[state->sprites_intersecting_index] = 0xFF*((state->sprites[i].attributes >> 0) & 0x01);
@@ -548,33 +563,35 @@ struct SystemState {
                 sprite_zero_segment2 |=  (((uint32_t) (sprite_MSB_planes[0] | sprite_LSB_planes[0]) << (32 - 8 + (32 - (sprite_Xs[0] % 32)))));
                 state->sprite_zero_line[sprite_Xs[0] / 32] = sprite_zero_segment1;
                 state->sprite_zero_line[sprite_Xs[0] / 32 + 1] = sprite_zero_segment2;
+
+                state->sprite_zero_hit_possible = true;
+            } else {
+                state->sprite_zero_hit_possible = false;
             }
         }
 
         /* https://wiki.nesdev.com/w/images/d/d1/Ntsc_timing.png */
         if ((state->vertical_scan < 240) && (1 <= state->horizontal_scan && state->horizontal_scan <= 257) || (321 <= state->horizontal_scan && state->horizontal_scan <= 336)) {
-            /* Y increment */
-            bool is_Y_increment = (state->horizontal_scan == 256) && is_rendering_enabled;
-            uint16_t fine_Y = (state->loopy_V & 0b0111000000000000) >> 12;
-            uint16_t coarse_Y = (state->loopy_V & 0b0000001111100000) >> 5;
-            fine_Y = (fine_Y + 1) & 0x07;
-            coarse_Y += (fine_Y == 0x00);
-            new_loopy_V = (state->loopy_V & ~0b0111001111100000) | (fine_Y << 12) | (coarse_Y << 5);
-            state->loopy_V = (state->loopy_V)*(!is_Y_increment) + (new_loopy_V)*is_Y_increment;
-
-            bool is_horizontal_prepare = (state->horizontal_scan == 257) && is_rendering_enabled;
-            new_loopy_V = (state->loopy_V & ~0b0000010000011111) | (state->loopy_T & 0b0000010000011111);
-            state->loopy_V = (state->loopy_V)*(!is_horizontal_prepare) + (new_loopy_V)*is_horizontal_prepare;
-
-            state->background_sprite_MSB_shift_register <<= is_background_enabled;
-            state->background_sprite_LSB_shift_register <<= is_background_enabled;
-            state->background_palette_MSB_shift_register <<= is_background_enabled;
-            state->background_palette_LSB_shift_register <<= is_background_enabled;
+            if (is_background_enabled) {
+                state->background_sprite_MSB_shift_register <<= 1;
+                state->background_sprite_LSB_shift_register <<= 1;
+                state->background_palette_MSB_shift_register <<= 1;
+                state->background_palette_LSB_shift_register <<= 1;
+            }
 
             int16u_t address = 0;
 
             switch (state->horizontal_scan % 8) {
                 case 0:
+                    /* Y increment */
+                    if ((state->horizontal_scan == 256) && is_rendering_enabled) {
+                        uint16_t fine_Y = (state->loopy_V & 0b0111000000000000) >> 12;
+                        uint16_t coarse_Y = (state->loopy_V & 0b0000001111100000) >> 5;
+                        fine_Y = (fine_Y + 1) & 0x07;
+                        coarse_Y += (fine_Y == 0x00);
+                        state->loopy_V = (state->loopy_V & ~0b0111001111100000) | (fine_Y << 12) | (coarse_Y << 5);
+                    }
+
                     // load shift register
                     state->background_sprite_MSB_shift_register = (state->background_sprite_MSB_shift_register & 0xFF00) | state->character_next_MSB_plane;
                     state->background_sprite_LSB_shift_register = (state->background_sprite_LSB_shift_register & 0xFF00) | state->character_next_LSB_plane;
@@ -582,6 +599,11 @@ struct SystemState {
                     state->background_palette_LSB_shift_register = (state->background_palette_LSB_shift_register & 0xFF00) | ((state->background_next_attribute >> 0) & 0x01)*0x00FF;
                     break;
                 case 1:
+                    /* horizontal prepare */
+                    if ((state->horizontal_scan == 257) && is_rendering_enabled) {
+                        state->loopy_V = (state->loopy_V & ~0b0000010000011111) | (state->loopy_T & 0b0000010000011111);
+                    }
+
                     // nametable byte
                     state->nametable_next_tile_id = memory.ppuMemoryMapped(0x2000 | (state->loopy_V & 0x0FFF));
                     break;
@@ -616,8 +638,7 @@ struct SystemState {
                     /* X increment */
                     uint8_t coarse_X = (state->loopy_V & 0b0000000000011111);
                     coarse_X = (coarse_X + 1) & 0x1F;
-                    int16u_t new_loopy_V = (state->loopy_V & ~0b0000000000011111) | coarse_X;
-                    state->loopy_V = (new_loopy_V)*(coarse_X != 0) + (new_loopy_V ^ 0b0000010000000000)*(coarse_X == 0);
+                    state->loopy_V = ((state->loopy_V & ~0b0000000000011111) | coarse_X) ^ 0b0000010000000000*(coarse_X == 0);
                     break;
             }
         }
@@ -633,12 +654,12 @@ struct SystemState {
         state->data1   = memory[state->program_counter + 1];
         state->data2   = memory[state->program_counter + 2];
 
-        state->ppu_cycle++;
         scanlineNext(this, state, memory);
         state->ppu_cycle++;
         scanlineNext(this, state, memory);
         state->ppu_cycle++;
         scanlineNext(this, state, memory);
+        state->ppu_cycle++;
 
         state->is_DMA_active = (state->is_DMA_active || (state->is_DMA_should_start && state->ppu_cycle % 2 == 1));
 
@@ -655,7 +676,6 @@ struct SystemState {
                              ((state->ppu_status & 0x80) == 0x80); // vblank has occurred
 
         state->has_vblank_nmi |= nmi_condition;
-        state->nmi_count += nmi_condition;
 
         int8u_t nmi_L = memory[0xFFFA];
         int8u_t nmi_H = memory[0xFFFB];
@@ -679,7 +699,7 @@ struct SystemState {
         state->is_DMA_active = new_is_DMA_active;
 
         #ifdef DEBUG
-        if (instruction_OK) {
+        if (blockIdx.x == 0 && threadIdx.x == OBSERVED_INSTANCE && instruction_OK) {
             uint8_t* opcodes = &memory[state->program_counter];
             traceWrite(state->program_counter, opcodes, state);
             trace_lines[trace_lines_index] = traceLineLast;

@@ -7,6 +7,8 @@
 
 #include <chrono>
 
+#include <unordered_set>
+
 #define DO_SOFTWARE true
 #define OBSERVED_INSTANCE 7
 #define FRAMEDATA_SIZE 256*240
@@ -56,17 +58,25 @@ namespace NESSolveModule {
     }
 
     void run(const unsigned char* file_location, int file_location_size,
-             char* _actions, int num_instances, int num_actions, int num_blocks,
+             char* _actions, int num_instances, int num_actions,
+             int num_blocks,
+             float* data_lines_out,
              char* frames_red_out, char* frames_green_out, char* frames_blue_out)
     {
         SystemState *systems;
         uint8_t* actions;
+        float* data_lines;
         uint8_t* frames_red;
         uint8_t* frames_green;
         uint8_t* frames_blue;
 
+        int64_t data_lines_size = num_instances*num_actions
+                                     *(256/16)*(240/16)
+                                     *sizeof(float);
+
         cudaMallocManaged(&systems, num_instances*sizeof(SystemState));
-        cudaMallocManaged(&actions, num_instances*sizeof(SystemState));
+        cudaMallocManaged(&actions, num_instances*num_actions);
+        cudaMallocManaged(&data_lines, data_lines_size);
         cudaMallocManaged(&frames_red, num_instances*FRAMEDATA_SIZE);
         cudaMallocManaged(&frames_green, num_instances*FRAMEDATA_SIZE);
         cudaMallocManaged(&frames_blue, num_instances*FRAMEDATA_SIZE);
@@ -76,12 +86,14 @@ namespace NESSolveModule {
         std::vector<char> character_data = romFileRead(file).second;
 
         printf("\nRegionComposition(%d)\n", sizeof(RegionComposition));
-        printf("instructions(%d)\n\n", sizeof(instructions));
+        printf("instructions(%d)\n", sizeof(instructions));
+        printf("data_lines(%ld)\n\n", num_instances*num_actions*(256/16)*(240/16)*sizeof(float));
 
         auto mark1 = std::chrono::high_resolution_clock::now();
 
         for (int i = 0; i < num_instances; i++) {
             systems[i] = SystemState(program_data1, character_data);
+            systems[i].data_lines = data_lines;
             systems[i].frames_red = frames_red;
             systems[i].frames_green = frames_green;
             systems[i].frames_blue = frames_blue;
@@ -97,15 +109,21 @@ namespace NESSolveModule {
         cudaDeviceSynchronize();
 
         auto mark3 = std::chrono::high_resolution_clock::now();
-        std::cout << "\nstates> " << std::chrono::duration_cast<std::chrono::microseconds>(mark2 - mark1).count();
-        std::cout << "\n total> " << std::chrono::duration_cast<std::chrono::microseconds>(mark3 - mark1).count();
-        std::cout << "\n   add> " << std::chrono::duration_cast<std::chrono::microseconds>(mark3 - mark2).count() << std::endl;
+        auto mark4 = std::chrono::high_resolution_clock::now();
 
+        std::cout << "\n states> " << std::chrono::duration_cast<std::chrono::microseconds>(mark2 - mark1).count();
+        std::cout << "\n  total> " << std::chrono::duration_cast<std::chrono::microseconds>(mark4 - mark1).count();
+        std::cout << "\nuniques> " << std::chrono::duration_cast<std::chrono::microseconds>(mark4 - mark3).count();
+        std::cout << "\n    add> " << std::chrono::duration_cast<std::chrono::microseconds>(mark3 - mark2).count() << std::endl;
+
+        memcpy(data_lines_out, data_lines, data_lines_size);
         memcpy(frames_red_out, frames_red, num_instances*FRAMEDATA_SIZE);
         memcpy(frames_green_out, frames_green, num_instances*FRAMEDATA_SIZE);
         memcpy(frames_blue_out, frames_blue, num_instances*FRAMEDATA_SIZE);
 
         cudaFree(&systems);
+        cudaFree(&actions);
+        cudaFree(&data_lines);
         cudaFree(&frames_red);
         cudaFree(&frames_green);
         cudaFree(&frames_blue);

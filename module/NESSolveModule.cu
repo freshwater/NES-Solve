@@ -11,7 +11,8 @@
 
 #define DO_SOFTWARE true
 #define OBSERVED_INSTANCE 7
-#define FRAMEDATA_SIZE 256*240
+#define FRAMEDATA_SIZE (256*240)
+#define HASH_SIZE (2*65536)
 // #define DEBUG 1
 
 typedef uint16_t int16u_t;
@@ -60,12 +61,13 @@ namespace NESSolveModule {
     void run(const unsigned char* file_location, int file_location_size,
              char* _actions, int num_instances, int num_actions,
              int num_blocks,
-             float* data_lines_out,
+             float* data_lines_out, char* hash_sets_out,
              char* frames_red_out, char* frames_green_out, char* frames_blue_out)
     {
         SystemState *systems;
         uint8_t* actions;
         float* data_lines;
+        uint8_t* hash_sets;
         uint8_t* frames_red;
         uint8_t* frames_green;
         uint8_t* frames_blue;
@@ -77,6 +79,7 @@ namespace NESSolveModule {
         cudaMallocManaged(&systems, num_instances*sizeof(SystemState));
         cudaMallocManaged(&actions, num_instances*num_actions);
         cudaMallocManaged(&data_lines, data_lines_size);
+        cudaMallocManaged(&hash_sets, num_instances*HASH_SIZE);
         cudaMallocManaged(&frames_red, num_instances*FRAMEDATA_SIZE);
         cudaMallocManaged(&frames_green, num_instances*FRAMEDATA_SIZE);
         cudaMallocManaged(&frames_blue, num_instances*FRAMEDATA_SIZE);
@@ -94,6 +97,7 @@ namespace NESSolveModule {
         for (int i = 0; i < num_instances; i++) {
             systems[i] = SystemState(program_data1, character_data);
             systems[i].data_lines = data_lines;
+            systems[i].hash_sets = hash_sets;
             systems[i].frames_red = frames_red;
             systems[i].frames_green = frames_green;
             systems[i].frames_blue = frames_blue;
@@ -117,6 +121,7 @@ namespace NESSolveModule {
         std::cout << "\n    add> " << std::chrono::duration_cast<std::chrono::microseconds>(mark3 - mark2).count() << std::endl;
 
         memcpy(data_lines_out, data_lines, data_lines_size);
+        memcpy(hash_sets_out, hash_sets, num_instances*HASH_SIZE);
         memcpy(frames_red_out, frames_red, num_instances*FRAMEDATA_SIZE);
         memcpy(frames_green_out, frames_green, num_instances*FRAMEDATA_SIZE);
         memcpy(frames_blue_out, frames_blue, num_instances*FRAMEDATA_SIZE);
@@ -124,6 +129,7 @@ namespace NESSolveModule {
         cudaFree(&systems);
         cudaFree(&actions);
         cudaFree(&data_lines);
+        cudaFree(&hash_sets);
         cudaFree(&frames_red);
         cudaFree(&frames_green);
         cudaFree(&frames_blue);

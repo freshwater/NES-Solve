@@ -28,7 +28,7 @@ Some of my experiments revolve around what I call the Block Score. See [here](ht
 
 The intuition behind the block score is as follows. First, it has less variance than the human-chosen game score, which is spikier and more prone to pathological scenarios. Second, humans are generally not good at designing score systems<i>no sense of irony</i>, so a more human-agnostic measure seems better to me.
 
-Third, games are visual and designed for humans to enjoy. The general characteristics of games as entertainment implies that greater progress through a game involves greater visual entropy, so to speak. A game's score system is often just a way of adding texture, but is otherwise not a significant element.
+Third, games are visual and designed for humans to enjoy. The general characteristics of games as entertainment implies that greater progress through a game involves greater visual entropy, so to speak. By contrast, a game's score system is often just a way of adding texture and otherwise not a significant element.
 
 I may be totally wrong on all of these points, but I'll worry about that later. Note that the block score actually does account for the human-given score to some degree. Particular kernel sizes or offsets will allow the digital score shown on the screen to be tracked logarithmically, which is about right. And for example, in Super Mario Bros small +100 tokens appear near events, which will count if they are unique.
 

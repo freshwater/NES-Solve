@@ -12,7 +12,7 @@ class build_ext(setuptools.command.build_ext.build_ext):
                                '-Xcompiler', '-I../src',
                                '-Xcompiler', '-I../generated',
                                # '-Xptxas', '-O0',
-                               '--maxrregcount=62',
+                               # '--maxrregcount=62',
                                '--ptxas-options=-v',
                                # '-Xcompiler', '-pthread',
                                # '-Xcompiler="-B/home/amr/anaconda3/compiler_compat"',
@@ -51,8 +51,6 @@ class build_ext(setuptools.command.build_ext.build_ext):
 extension = Cython.Build.cythonize(setuptools.Extension("*", ["*.pyx"]),
                                    compiler_directives={'language_level': '3'},
                                    build_dir="build")
-
-print(numpy.get_include())
 
 setuptools.setup(name="NESSolve",
                  ext_modules=extension,

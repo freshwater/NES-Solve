@@ -126,13 +126,13 @@ namespace NESSolveModule {
         memcpy(frames_green_out, frames_green, num_instances*FRAMEDATA_SIZE);
         memcpy(frames_blue_out, frames_blue, num_instances*FRAMEDATA_SIZE);
 
-        cudaFree(&systems);
-        cudaFree(&actions);
-        cudaFree(&data_lines);
-        cudaFree(&hash_sets);
-        cudaFree(&frames_red);
-        cudaFree(&frames_green);
-        cudaFree(&frames_blue);
+        cudaFree(systems);
+        cudaFree(actions);
+        cudaFree(data_lines);
+        cudaFree(hash_sets);
+        cudaFree(frames_red);
+        cudaFree(frames_green);
+        cudaFree(frames_blue);
     }
 }
 

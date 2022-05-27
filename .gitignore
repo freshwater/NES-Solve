@@ -1,4 +1,19 @@
 
-*.swp
-__pycache__/
+# macOS
+
 .DS_Store
+
+# python
+
+*.pyc
+__pycache__/
+
+# vscode
+
+.vscode/
+
+# vim
+
+*.swp
+*.swo
+

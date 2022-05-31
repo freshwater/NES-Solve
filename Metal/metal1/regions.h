@@ -38,40 +38,77 @@ struct Region_Wire {
     uint_t cycle_base_increment;
 
     void transition(thread ComputationState* state, device Memory& memory) const constant {
+        int any_indirect_x = value1_from_indirect_x_dereference | address_from_indirect_x;
+        // int any_indirect_y = value1_from_indirect_y_dereference | address_from_indirect_y;
+        int any_indirect = any_indirect_x /*| any_indirect_y*/;
+
         int address_absolute = (state->data2 << 8) | state->data1;
+        int address_HL_indirect = 0;
 
-        state->value1 = (state->data1)*value1_from_data1;
+        if (any_indirect /*| address_from_absolute_dereference*/) {
+            int address_L = any_indirect ? (0xFF & (state->data1 + ((state->X)*any_indirect_x))) : (address_absolute);
+            int address_H = any_indirect ? (0xFF & (state->data1 + ((state->X)*any_indirect_x) + 1))
+                                         : ((state->data2 << 8) | (0x00FF&(state->data1 + 1)));
 
-        state->address = (address_absolute)*address_from_absolute;
+            int address_L_indirect = Memory__readMemoryRaw(memory, address_L);
+            int address_H_indirect = Memory__readMemoryRaw(memory, address_H);
+            address_HL_indirect = (address_H_indirect << 8) | address_L_indirect;
+        }
+
+        int any_dereference = value1_from_zeropage_dereference |
+                              value1_from_absolute_dereference |
+                              value1_from_indirect_x_dereference;
+
+        if (any_dereference) {
+            int address_dereference = (state->data1)*value1_from_zeropage_dereference +
+                                      (address_absolute)*value1_from_absolute_dereference +
+                                      (address_HL_indirect)*value1_from_indirect_x_dereference;
+
+            state->value1 = Memory__readMemoryLogical(memory, address_dereference);
+
+        } else {
+
+            state->value1 = (state->data1)*value1_from_data1 +
+                            (state->stack_offset)*value1_from_stack_offset +
+                            (state->A)*value1_from_A +
+                            (state->X)*value1_from_X +
+                            (state->Y)*value1_from_Y;
+        }
+
+        state->address = (address_absolute)*address_from_absolute +
+                         (state->data1)*address_from_zeropage +
+                         (address_HL_indirect)*address_from_indirect_x;
     }
 
     /*
     void transition(SystemState* system, ComputationState* state, Memory& memory) const {
-        int any_indirect_x = value1_from_indirect_x_dereference | address_from_indirect_x;
-        int any_indirect_y = value1_from_indirect_y_dereference | address_from_indirect_y;
+        // int any_indirect_x = value1_from_indirect_x_dereference | address_from_indirect_x;
+        // int any_indirect_y = value1_from_indirect_y_dereference | address_from_indirect_y;
         int any_indirect = any_indirect_x | any_indirect_y;
 
         // int address_absolute = (state->data2 << 8) | state->data1;
-        int address_HL_indirect = 0;
+        // int address_HL_indirect = 0;
 
         if (any_indirect | address_from_absolute_dereference) {
-            int address_L = any_indirect ? (0xFF & (state->data1 + ((state->X)*any_indirect_x))) : (address_absolute);
-            int address_H = any_indirect ? (0xFF & (state->data1 + ((state->X)*any_indirect_x) + 1))
-                                         : ((state->data2 << 8) | 0x00FF&(state->data1 + 1));
+            // int address_L = any_indirect ? (0xFF & (state->data1 + ((state->X)*any_indirect_x))) : (address_absolute);
+            // int address_H = any_indirect ? (0xFF & (state->data1 + ((state->X)*any_indirect_x) + 1))
+                                         // : ((state->data2 << 8) | 0x00FF&(state->data1 + 1));
 
-            int address_L_indirect = memory[address_L];
-            int address_H_indirect = memory[address_H];
-            address_HL_indirect = (address_H_indirect << 8) | address_L_indirect;
+            // int address_L_indirect = memory[address_L];
+            // int address_H_indirect = memory[address_H];
+            // address_HL_indirect = (address_H_indirect << 8) | address_L_indirect;
         }
 
-        int any_dereference = value1_from_zeropage_dereference | value1_from_absolute_dereference |
-                              value1_from_zeropage_x_dereference | value1_from_absolute_x_dereference | value1_from_indirect_x_dereference |
+        int any_dereference = // value1_from_zeropage_dereference |
+                              // value1_from_absolute_dereference |
+                              value1_from_zeropage_x_dereference | value1_from_absolute_x_dereference |
+                              // value1_from_indirect_x_dereference |
                               value1_from_zeropage_y_dereference | value1_from_absolute_y_dereference | value1_from_indirect_y_dereference;
 
         if (any_dereference) {
-            int address_dereference = ((state->data1)*value1_from_zeropage_dereference +
-                                       (address_absolute)*value1_from_absolute_dereference +
-                                       (address_HL_indirect)*value1_from_indirect_x_dereference +
+            int address_dereference =  // ((state->data1)*value1_from_zeropage_dereference +
+                                       // (address_absolute)*value1_from_absolute_dereference +
+                                       // (address_HL_indirect)*value1_from_indirect_x_dereference +
                                        (address_HL_indirect + state->Y)*value1_from_indirect_y_dereference +
                                        (address_absolute + state->X)*value1_from_absolute_x_dereference +
                                        (address_absolute + state->Y)*value1_from_absolute_y_dereference +
@@ -80,15 +117,15 @@ struct Region_Wire {
 
             state->value1 = memory.read(address_dereference, state);
         } else {
-            state->value1 = ((state->data1)*value1_from_data1 +
+            state->value1 =  // ((state->data1)*value1_from_data1 +
                              (state->stack_offset)*value1_from_stack_offset +
-                             (state->A)*value1_from_A +
-                             (state->X)*value1_from_X +
-                             (state->Y)*value1_from_Y);
+                             // (state->A)*value1_from_A +
+                             // (state->X)*value1_from_X +
+                             // (state->Y)*value1_from_Y);
         }
 
         state->address = // ((address_absolute)*address_from_absolute +
-                         (state->data1)*address_from_zeropage +
+                         // (state->data1)*address_from_zeropage +
                          (0xFF&(state->data1 + state->X))*address_from_zeropage_x +
                          (address_HL_indirect)*address_from_absolute_dereference +
                          (address_HL_indirect)*address_from_indirect_x +
@@ -114,16 +151,16 @@ struct Region_Compare {
     flag_t value1_out : 1;
     flag_t value3_from_carry : 1;
 
-    /*
-    void transition(SystemState* system, ComputationState* state, Memory& memory) const {
-        int8u_t lhs = (state->A)*A_compare_with_value1 + (state->X)*X_compare_with_value1 + (state->Y)*Y_compare_with_value1;
+    void transition(thread ComputationState* state, device Memory& memory) const constant {
+        int8u_t lhs = (state->A)*A_compare_with_value1 +
+                      (state->X)*X_compare_with_value1 +
+                      (state->Y)*Y_compare_with_value1;
         int8u_t result = lhs - state->value1;
         int8u_t carry = (state->value1) <= lhs;
 
         state->value1 = value1_out ? (result) : state->value1;
         state->value3 = value3_from_carry ? (carry) : state->value3;
     }
-    */
 };
 
 struct Behaviors {
@@ -153,15 +190,13 @@ struct Region_StackRead {
     flag_t value1_from_stack_read : 1;
     flag_t read_special_status_bits : 1;
 
-    /*
-    void transition(SystemState* system, ComputationState* state, Memory& memory) const {
+    void transition(thread ComputationState* state, device Memory& memory) const constant {
         state->stack_offset += value1_from_stack_read;
 
-        state->value1 = value1_from_stack_read ? (memory[STACK_ZERO | state->stack_offset]) : state->value1;
+        state->value1 = value1_from_stack_read ? (Memory__readMemoryRaw(memory, STACK_ZERO | state->stack_offset)) : state->value1;
         int8u_t special_status_bits = Behaviors::special_status_bits_on_pull(state->statusRegisterByteGet(), state->value1);
         state->value1 = read_special_status_bits ? (special_status_bits) : state->value1;
     }
-    */
 };
 
 struct Region_BooleanLogic {
@@ -172,16 +207,14 @@ struct Region_BooleanLogic {
     flag_t value1_out : 1;
     flag_t value3_out : 1;
 
-    /*
-    void transition(SystemState* system, ComputationState* state, Memory& memory) const {
-        int8u_t result = ((state->A & state->value1)*A_AND_value1 +
-                          (state->A | state->value1)*A_OR_value1 +
-                          (state->A ^ state->value1)*A_XOR_value1);
+    void transition(thread ComputationState* state, device Memory& memory) const constant {
+        int8u_t result = (state->A & state->value1)*A_AND_value1 +
+                         (state->A | state->value1)*A_OR_value1 +
+                         (state->A ^ state->value1)*A_XOR_value1;
 
         state->value1 = value1_out ? (result) : state->value1;
         state->value3 = value3_out ? (result) : state->value3;
     }
-    */
 };
 
 struct Region_BitShift {
@@ -193,8 +226,7 @@ struct Region_BitShift {
     flag_t value1_out : 1;
     flag_t value3_from_carry : 1;
 
-    /*
-    void transition(SystemState* system, ComputationState* state, Memory& memory) const {
+    void transition(thread ComputationState* state, device Memory& memory) const constant {
         if (left_shift_from_value1 | right_shift_from_value1 | left_rotate_from_value1 | right_rotate_from_value1) {
             flag_t any_left = left_shift_from_value1 | left_rotate_from_value1;
             flag_t any_right = right_shift_from_value1 | right_rotate_from_value1;
@@ -207,25 +239,21 @@ struct Region_BitShift {
             state->value3 = value3_from_carry ? (new_carry) : state->value3;
         }
     }
-    */
 };
 
 struct Region_Arithmetic {
     int_t value1_increment;
 
-    /*
-    void transition(SystemState* system, ComputationState* state, Memory& memory) const {
+    void transition(thread ComputationState* state, device Memory& memory) const constant {
         state->value1 += value1_increment;
     }
-    */
 };
 
 struct Region_ADC_SBC {
     flag_t value1_from_ADC : 1;
     flag_t value1_from_SBC : 1;
 
-    /*
-    void transition(SystemState* system, ComputationState* state, Memory& memory) const {
+    void transition(thread ComputationState* state, device Memory& memory) const constant {
         if (value1_from_ADC | value1_from_SBC) {
             int8u_t value1 = value1_from_SBC ? ~(state->value1) : state->value1;
             int16u_t result = state->A + value1 + state->C;
@@ -239,7 +267,6 @@ struct Region_ADC_SBC {
             state->value3 = carry;
         }
     }
-    */
 };
 
 struct Region_JSR_RTS_RTI {
@@ -255,12 +282,20 @@ struct Region_JSR_RTS_RTI {
         if (any_OK) {
             if (jsr_OK) {
                 state->program_counter += (-1 + 3)*jsr_OK;
-                Memory__writeMemory(memory, STACK_ZERO | state->stack_offset, state->program_counter >> 8);
+
+                Memory__writeMemoryRaw(memory, STACK_ZERO | state->stack_offset, state->program_counter >> 8);
                 state->stack_offset--;
-                Memory__writeMemory(memory, STACK_ZERO | state->stack_offset, state->program_counter & 0x00FF);
+                Memory__writeMemoryRaw(memory, STACK_ZERO | state->stack_offset, state->program_counter & 0x00FF);
                 state->stack_offset--;
 
                 state->program_counter = state->address;
+            } else {
+                state->stack_offset++;
+                uint8_t pc_L = Memory__readMemoryRaw(memory, STACK_ZERO | state->stack_offset);
+                state->stack_offset++;
+                uint8_t pc_H = Memory__readMemoryRaw(memory, STACK_ZERO | state->stack_offset);
+
+                state->program_counter = ((pc_H << 8) | pc_L) + rts_OK - rti_OK;
             }
         }
     }
@@ -268,20 +303,22 @@ struct Region_JSR_RTS_RTI {
     /*
     void transition(SystemState* system, ComputationState* state, Memory& memory) const {
         if (any_OK) {
-            if (jsr_OK | brk_OK | nmi_OK) {
-                state->program_counter += (-1 + 3)*jsr_OK;
+            if (// jsr_OK |
+                brk_OK |
+                nmi_OK) {
+                // state->program_counter += (-1 + 3)*jsr_OK;
 
-                memory[STACK_ZERO | state->stack_offset] = state->program_counter >> 8;
-                state->stack_offset--;
-                memory[STACK_ZERO | state->stack_offset] = state->program_counter & 0x00FF;
-                state->stack_offset--;
-                state->program_counter = state->address;
+                // memory[STACK_ZERO | state->stack_offset] = state->program_counter >> 8;
+                // state->stack_offset--;
+                // memory[STACK_ZERO | state->stack_offset] = state->program_counter & 0x00FF;
+                // state->stack_offset--;
+                // state->program_counter = state->address;
             } else {
-                state->stack_offset++;
-                uint8_t pc_L = memory[STACK_ZERO | state->stack_offset];
-                state->stack_offset++;
-                uint8_t pc_H = memory[STACK_ZERO | state->stack_offset];
-                state->program_counter = ((pc_H << 8) | pc_L) + rts_OK - rti_OK;
+                // state->stack_offset++;
+                // uint8_t pc_L = memory[STACK_ZERO | state->stack_offset];
+                // state->stack_offset++;
+                // uint8_t pc_H = memory[STACK_ZERO | state->stack_offset];
+                // state->program_counter = ((pc_H << 8) | pc_L) + rts_OK - rti_OK;
             }
         }
     }
@@ -300,13 +337,6 @@ struct Region_Rewire {
     flag_t stack_offset_from_X : 1;
 
     void transition(thread ComputationState* state, device Memory& memory) const constant {
-        state->program_counter = program_counter_from_address ? (state->address) : state->program_counter;
-
-        state->A = A_from_value1 ? (state->value1) : state->A;
-        // state->X = X_from_value1 ? (state->value1) : state->X;
-    }
-    /*
-    void transition(SystemState* system, ComputationState* state, Memory& memory) const {
         int8u_t special_status_bits = Behaviors::special_status_bits_on_push(state->statusRegisterByteGet(), value1_from_status_push_bits);
 
         state->A = A_from_value1 ? (state->value1) : state->A;
@@ -319,7 +349,6 @@ struct Region_Rewire {
         state->program_counter = program_counter_from_address ? (state->address) : state->program_counter;
         state->stack_offset = stack_offset_from_X ? (state->X) : state->stack_offset;
     }
-    */
 };
 
 struct Region_Branch {
@@ -331,15 +360,17 @@ struct Region_Branch {
     flag_t C_flag_branch : 1;
 
     void transition(thread ComputationState* state, device Memory& memory) const constant {
-        bool condition = (state->C == flag_match)*C_flag_branch +
-                         (state->Z == flag_match)*Z_flag_branch;
+        bool condition = (state->N == flag_match)*N_flag_branch +
+                         (state->O == flag_match)*O_flag_branch +
+                         (state->Z == flag_match)*Z_flag_branch +
+                         (state->C == flag_match)*C_flag_branch;
 
         state->program_counter = state->program_counter + ((int8_t)(state->value1))*condition;
     }
     /*
     void transition(SystemState* system, ComputationState* state, Memory& memory) const {
-        bool condition = ((state->N == flag_match)*N_flag_branch +
-                          (state->O == flag_match)*O_flag_branch +
+        bool condition =  // ((state->N == flag_match)*N_flag_branch +
+                          // (state->O == flag_match)*O_flag_branch +
                           // (state->Z == flag_match)*Z_flag_branch +
                           // (state->C == flag_match)*C_flag_branch);
 
@@ -354,10 +385,17 @@ struct Region_Write {
     flag_t memory_write_value1 : 1;
     flag_t oam_memory_write_value1 : 1;
 
+    void transition(thread ComputationState* state, device Memory& memory) const constant {
+        if (memory_write_value1) {
+            Memory__writeMemoryLogical(memory, state->address, state->value1);
+        }
+    }
     /*
     void transition(SystemState* system, ComputationState* state, Memory& memory) const {
-        if (memory_write_value1 | oam_memory_write_value1) {
-            memory.write(state->address, state->value1, oam_memory_write_value1, state);
+        if ( // memory_write_value1
+             | oam_memory_write_value1) {
+            memory.write( // state->address, state->value1,
+                         oam_memory_write_value1, state);
         }
     }
     */
@@ -366,13 +404,11 @@ struct Region_Write {
 struct Region_StackWrite {
     flag_t stack_write_value1 : 1;
 
-    /*
-    void transition(SystemState* system, ComputationState* state, Memory& memory) const {
+    void transition(thread ComputationState* state, device Memory& memory) const constant {
         int address = stack_write_value1 ? (STACK_ZERO | state->stack_offset) : NULL_ADDRESS_WRITE;
-        memory[address] = state->value1;
+        Memory__writeMemoryRaw(memory, address, state->value1);
         state->stack_offset -= stack_write_value1;
     }
-    */
 };
 
 struct Region_ImplementationState {
@@ -409,13 +445,30 @@ struct Region_Flags {
     void transition(thread ComputationState* state, device Memory& memory) const constant {
         int8u_t N_value = (state->value1)*(N_adjust_source == 1);
 
-        int8u_t Z_value = (state->value1)*(Z_adjust_source == 1);
+        int8u_t O_direct_value = (state->value2)*(O_adjust_direct == 2);
 
-        int8u_t C_direct_value = 0;
+        int8u_t Z_value = (state->value1)*(Z_adjust_source == 1) |
+                          (state->value3)*(Z_adjust_source == 3);
 
-        state->N = ((state->N)*N_keep) + N_adjust + (N_value >> 7);
-        state->Z = ((state->Z)*Z_keep) + Z_adjust + (Z_value == 0)*(Z_adjust_source != 0);
-        state->C = ((state->C)*C_keep) + C_adjust + (C_direct_value);
+        int8u_t C_direct_value = (state->value3)*(C_adjust_direct == 3);
+
+        state->N = (state->N)*N_keep + N_adjust + (N_value >> 7);
+        state->O = (state->O)*O_keep + O_adjust + (O_direct_value);
+        state->D = (state->D)*D_keep + D_adjust;
+        // state->I = ((state->I)*I_keep) + I_adjust;
+        state->Z = (state->Z)*Z_keep + Z_adjust + (Z_value == 0)*(Z_adjust_source != 0);
+        state->C = (state->C)*C_keep + C_adjust + (C_direct_value);
+
+        if (set_byte_from_value1) {
+            state->N = (state->value1 >> 7) & 0x01;
+            state->O = (state->value1 >> 6) & 0x01;
+            state->U = (state->value1 >> 5) & 0x01;
+            state->B = (state->value1 >> 4) & 0x01;
+            state->D = (state->value1 >> 3) & 0x01;
+            // state->I = (state->value1 >> 2) & 0x01;
+            state->Z = (state->value1 >> 1) & 0x01;
+            state->C = (state->value1 >> 0) & 0x01;
+        }
     }
 
     /*
@@ -425,33 +478,33 @@ struct Region_Flags {
                            (state->value3)*(N_adjust_source == 3));
 
         int8u_t O_direct_value = ((state->value1)*(O_adjust_direct == 1) |
-                                  (state->value2)*(O_adjust_direct == 2) |
+                                  // (state->value2)*(O_adjust_direct == 2) |
                                   (state->value3)*(O_adjust_direct == 3));
 
-        int8u_t Z_value = ((state->value1)*(Z_adjust_source == 1) |
+        int8u_t Z_value =  // ((state->value1)*(Z_adjust_source == 1) |
                            (state->value2)*(Z_adjust_source == 2) |
-                           (state->value3)*(Z_adjust_source == 3));
+                           // (state->value3)*(Z_adjust_source == 3));
 
         int8u_t C_direct_value = ((state->value1)*(C_adjust_direct == 1) |
                                   (state->value2)*(C_adjust_direct == 2) |
-                                  (state->value3)*(C_adjust_direct == 3));
+                                  // (state->value3)*(C_adjust_direct == 3));
 
         // state->N = ((state->N)*N_keep) + N_adjust + (N_value >> 7);
-        state->O = ((state->O)*O_keep) + O_adjust + (O_direct_value);
-        state->D = ((state->D)*D_keep) + D_adjust;
+        // state->O = ((state->O)*O_keep) + O_adjust + (O_direct_value);
+        // state->D = ((state->D)*D_keep) + D_adjust;
         // state->Z = ((state->Z)*Z_keep) + Z_adjust + (Z_value == 0)*(Z_adjust_source != 0);
         // state->C = ((state->C)*C_keep) + C_adjust + (C_direct_value);
         state->I = ((state->I)*I_keep) + I_adjust;
 
         if (set_byte_from_value1) {
-            state->N = (state->value1 >> 7) & 0x01;
-            state->O = (state->value1 >> 6) & 0x01;
-            state->U = (state->value1 >> 5) & 0x01;
-            state->B = (state->value1 >> 4) & 0x01;
-            state->D = (state->value1 >> 3) & 0x01;
+            // state->N = (state->value1 >> 7) & 0x01;
+            // state->O = (state->value1 >> 6) & 0x01;
+            // state->U = (state->value1 >> 5) & 0x01;
+            // state->B = (state->value1 >> 4) & 0x01;
+            // state->D = (state->value1 >> 3) & 0x01;
             state->I = (state->value1 >> 2) & 0x01;
-            state->Z = (state->value1 >> 1) & 0x01;
-            state->C = (state->value1 >> 0) & 0x01;
+            // state->Z = (state->value1 >> 1) & 0x01;
+            // state->C = (state->value1 >> 0) & 0x01;
         }
     }
     */
@@ -488,19 +541,19 @@ struct RegionComposition {
         // }
 
         wire.transition(state, memory);
-        // compare.transition(system, state, memory);
-        // boolean_logic.transition(system, state, memory);
-        // bit_shift.transition(system, state, memory);
-        // arithmetic.transition(system, state, memory);
-        // stack_read.transition(system, state, memory);
-        // adc_sbc.transition(system, state, memory);
+        compare.transition(state, memory);
+        boolean_logic.transition(state, memory);
+        bit_shift.transition(state, memory);
+        arithmetic.transition(state, memory);
+        stack_read.transition(state, memory);
+        adc_sbc.transition(state, memory);
         jsr_rts_rti.transition(state, memory);
         branch.transition(state, memory);
         rewire.transition(state, memory);
         // implementation_state.transition(system, state, memory);
         flags.transition(state, memory);
-        // write.transition(system, state, memory);
-        // stack_write.transition(system, state, memory);
+        write.transition(state, memory);
+        stack_write.transition(state, memory);
         program_counter.transition(state, memory);
     }
 };

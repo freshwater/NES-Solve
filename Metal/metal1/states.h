@@ -58,16 +58,13 @@ struct ComputationState {
     int8u_t data1;
     int8u_t data2;
 
-    int16u_t address;
     int8u_t value1;
-
-    /*
-    // int8u_t value1;
     int8u_t value2;
     int8u_t value3;
 
-    // int16u_t address;
+    int16u_t address;
 
+    /*
     int8u_t store;
     int8u_t ppu_status;
     */
@@ -112,31 +109,80 @@ struct ComputationState {
 #define PPU_MEMORY         (PPU_REGISTERS + 8)
 #define CARTRIDGE_MEMORY   (PPU_MEMORY + 0x4000)
 
+#define NULL_ADDRESS_READ  0x10000
+#define NULL_ADDRESS_WRITE (NULL_ADDRESS_READ + 2)
+
 struct Memory {
     int8u_t cpu_memory[0x800];
     int8u_t ppu_registers[8];
     int8u_t ppu_memory[0x4000];
     int8u_t cartridge_memory[0x8000];
+    // int8u_t null_address_read[2] = {};
+    // int8u_t null_address_write[2] = {};
 };
 
 #ifdef __METAL__
 int Memory__mapOffset(int index) {
     return
-        (0x8000 <= index && index < 0x10000)*CARTRIDGE_MEMORY;
+         (0x0000 <= index && index < 0x2000)*CPU_MEMORY +
+         (0x8000 <= index && index < 0x10000)*CARTRIDGE_MEMORY;
 }
 
 int Memory__mapIndex(int offset, int index) {
-    return (offset == CARTRIDGE_MEMORY)*(index - 0x8000);
+    return (offset ==       CPU_MEMORY)*(index & 0x07FF) +
+           (offset == CARTRIDGE_MEMORY)*(index - 0x8000);
 }
 
-int Memory__readMemory(device Memory& memory, int index) {
+/*
+int mapOffset(int index) {
+    return      // (CPU_MEMORY)*(0x0000 <= index && index < 0x2000) +
+                (PPU_REGISTERS)*(0x2000 <= index && index < 0x4000) +
+    (NULL_ADDRESS_WRITE_OFFSET)*(0x4000 <= index && index < 0x4014) +
+             (PPU_OAM_REGISTER)*(0x4014 == index) +
+    (NULL_ADDRESS_WRITE_OFFSET)*(0x4015 == index) +
+               (CONTROL_PORT_1)*(0x4016 == index) +
+               (CONTROL_PORT_2)*(0x4017 == index) +
+    (NULL_ADDRESS_WRITE_OFFSET)*(0x4018 <= index && index < 0x8000) +
+          // (CARTRIDGE_MEMORY)*(0x8000 <= index && index < 0x10000) +
+     (NULL_ADDRESS_READ_OFFSET)*(NULL_ADDRESS_READ == index) +
+    (NULL_ADDRESS_WRITE_OFFSET)*(NULL_ADDRESS_WRITE == index);
+}
+
+int mapIndex(int offset, int index) {
+    return // (index & 0x7FF)*(CPU_MEMORY       == offset) +
+       ((index - 0x2000) & 7)*(PPU_REGISTERS    == offset) +
+                          (0)*(PPU_OAM_REGISTER == offset) +
+                          (0)*(CONTROL_PORT_1   == offset) +
+                          (0)*(CONTROL_PORT_2   == offset) +
+                          (0)*(PPU_OAM_REGISTER == offset) +
+          // (index - 0x8000)*(CARTRIDGE_MEMORY == offset) +
+                          (0)*(NULL_ADDRESS_READ_OFFSET  == offset) +
+                          (0)*(NULL_ADDRESS_WRITE_OFFSET == offset);
+}
+*/
+
+int8u_t Memory__readMemoryLogical(device Memory& memory, int index) {
     int offset = Memory__mapOffset(index);
     index = Memory__mapIndex(offset, index);
 
     return memory.cpu_memory[offset + index];
 }
 
-void Memory__writeMemory(device Memory& memory, int index, int8u_t data) {
+void Memory__writeMemoryLogical(device Memory& memory, int index, int8u_t data) {
+    int offset = Memory__mapOffset(index);
+    index = Memory__mapIndex(offset, index);
+
+    memory.cpu_memory[offset + index] = data;
+}
+
+int8u_t Memory__readMemoryRaw(device Memory& memory, int index) {
+    int offset = Memory__mapOffset(index);
+    index = Memory__mapIndex(offset, index);
+
+    return memory.cpu_memory[offset + index];
+}
+
+void Memory__writeMemoryRaw(device Memory& memory, int index, int8u_t data) {
     int offset = Memory__mapOffset(index);
     index = Memory__mapIndex(offset, index);
 
@@ -170,9 +216,9 @@ void scanlineNext(thread ComputationState* state, device Memory& memory) {
 }
 
 void SystemState__next(thread ComputationState* state, device Memory& memory, device Trace* traceLines, int traceLinesIndex) {
-    state->opcode = Memory__readMemory(memory, state->program_counter + 0 + 0);
-    state->data1  = Memory__readMemory(memory, state->program_counter + 1 + 0);
-    state->data2  = Memory__readMemory(memory, state->program_counter + 2 + 0);
+    state->opcode = Memory__readMemoryRaw(memory, state->program_counter + 0);
+    state->data1  = Memory__readMemoryRaw(memory, state->program_counter + 1);
+    state->data2  = Memory__readMemoryRaw(memory, state->program_counter + 2);
 
     scanlineNext(state, memory);
     scanlineNext(state, memory);

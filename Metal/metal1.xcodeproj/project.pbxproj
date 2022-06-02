@@ -7,9 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C587F7C928482D46000D12F8 /* _InstructionsInformation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C587F7C828482D46000D12F8 /* _InstructionsInformation.swift */; };
 		C590D26927F25D850070A631 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = C590D26827F25D850070A631 /* main.swift */; };
 		C590D27027F261190070A631 /* main.metal in Sources */ = {isa = PBXBuildFile; fileRef = C590D26F27F261190070A631 /* main.metal */; };
-		C5D77DB02832E83400AACBA7 /* InstructionsInformation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5D77DAF2832E83400AACBA7 /* InstructionsInformation.swift */; };
 		C5D77DB22832F1A600AACBA7 /* Utilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5D77DB12832F1A600AACBA7 /* Utilities.swift */; };
 /* End PBXBuildFile section */
 
@@ -26,13 +26,13 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		C587F7C628482071000D12F8 /* _instructions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = _instructions.h; sourceTree = "<group>"; };
+		C587F7C828482D46000D12F8 /* _InstructionsInformation.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = _InstructionsInformation.swift; sourceTree = "<group>"; };
 		C590D26527F25D850070A631 /* metal1 */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = metal1; sourceTree = BUILT_PRODUCTS_DIR; };
 		C590D26827F25D850070A631 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		C590D26F27F261190070A631 /* main.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = main.metal; sourceTree = "<group>"; };
 		C590D27127F26AE50070A631 /* states.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = states.h; sourceTree = "<group>"; };
-		C5D77DAC2830AC9800AACBA7 /* instructions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = instructions.h; sourceTree = "<group>"; };
 		C5D77DAD2830AD4000AACBA7 /* regions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = regions.h; sourceTree = "<group>"; };
-		C5D77DAF2832E83400AACBA7 /* InstructionsInformation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructionsInformation.swift; sourceTree = "<group>"; };
 		C5D77DB12832F1A600AACBA7 /* Utilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utilities.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -47,6 +47,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		C587F7C528482008000D12F8 /* generated */ = {
+			isa = PBXGroup;
+			children = (
+				C587F7C628482071000D12F8 /* _instructions.h */,
+				C587F7C828482D46000D12F8 /* _InstructionsInformation.swift */,
+			);
+			path = generated;
+			sourceTree = "<group>";
+		};
 		C590D25C27F25D850070A631 = {
 			isa = PBXGroup;
 			children = (
@@ -66,12 +75,11 @@
 		C590D26727F25D850070A631 /* metal1 */ = {
 			isa = PBXGroup;
 			children = (
+				C587F7C528482008000D12F8 /* generated */,
 				C590D26827F25D850070A631 /* main.swift */,
-				C5D77DAC2830AC9800AACBA7 /* instructions.h */,
 				C590D27127F26AE50070A631 /* states.h */,
 				C590D26F27F261190070A631 /* main.metal */,
 				C5D77DAD2830AD4000AACBA7 /* regions.h */,
-				C5D77DAF2832E83400AACBA7 /* InstructionsInformation.swift */,
 				C5D77DB12832F1A600AACBA7 /* Utilities.swift */,
 			);
 			path = metal1;
@@ -138,7 +146,7 @@
 				C590D27027F261190070A631 /* main.metal in Sources */,
 				C590D26927F25D850070A631 /* main.swift in Sources */,
 				C5D77DB22832F1A600AACBA7 /* Utilities.swift in Sources */,
-				C5D77DB02832E83400AACBA7 /* InstructionsInformation.swift in Sources */,
+				C587F7C928482D46000D12F8 /* _InstructionsInformation.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

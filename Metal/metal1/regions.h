@@ -39,13 +39,13 @@ struct Region_Wire {
 
     void transition(thread ComputationState* state, device Memory& memory) const constant {
         int any_indirect_x = value1_from_indirect_x_dereference | address_from_indirect_x;
-        // int any_indirect_y = value1_from_indirect_y_dereference | address_from_indirect_y;
-        int any_indirect = any_indirect_x /*| any_indirect_y*/;
+        int any_indirect_y = value1_from_indirect_y_dereference | address_from_indirect_y;
+        int any_indirect = any_indirect_x | any_indirect_y;
 
         int address_absolute = (state->data2 << 8) | state->data1;
         int address_HL_indirect = 0;
 
-        if (any_indirect /*| address_from_absolute_dereference*/) {
+        if (any_indirect | address_from_absolute_dereference) {
             int address_L = any_indirect ? (0xFF & (state->data1 + ((state->X)*any_indirect_x))) : (address_absolute);
             int address_H = any_indirect ? (0xFF & (state->data1 + ((state->X)*any_indirect_x) + 1))
                                          : ((state->data2 << 8) | (0x00FF&(state->data1 + 1)));
@@ -55,14 +55,19 @@ struct Region_Wire {
             address_HL_indirect = (address_H_indirect << 8) | address_L_indirect;
         }
 
-        int any_dereference = value1_from_zeropage_dereference |
-                              value1_from_absolute_dereference |
-                              value1_from_indirect_x_dereference;
+        int any_dereference = value1_from_zeropage_dereference | value1_from_absolute_dereference |
+                              value1_from_zeropage_x_dereference | value1_from_absolute_x_dereference | value1_from_indirect_x_dereference |
+                              value1_from_zeropage_y_dereference | value1_from_absolute_y_dereference | value1_from_indirect_y_dereference;
 
         if (any_dereference) {
             int address_dereference = (state->data1)*value1_from_zeropage_dereference +
                                       (address_absolute)*value1_from_absolute_dereference +
-                                      (address_HL_indirect)*value1_from_indirect_x_dereference;
+                                      (address_HL_indirect)*value1_from_indirect_x_dereference +
+                                      (address_HL_indirect + state->Y)*value1_from_indirect_y_dereference +
+                                      (address_absolute + state->X)*value1_from_absolute_x_dereference +
+                                      (address_absolute + state->Y)*value1_from_absolute_y_dereference +
+                                      (0xFF&(state->data1 + state->X))*value1_from_zeropage_x_dereference +
+                                      (0x00FF&(state->data1 + state->Y))*value1_from_zeropage_y_dereference;
 
             state->value1 = Memory__readMemoryLogical(memory, address_dereference);
 
@@ -77,63 +82,17 @@ struct Region_Wire {
 
         state->address = (address_absolute)*address_from_absolute +
                          (state->data1)*address_from_zeropage +
-                         (address_HL_indirect)*address_from_indirect_x;
-    }
-
-    /*
-    void transition(SystemState* system, ComputationState* state, Memory& memory) const {
-        // int any_indirect_x = value1_from_indirect_x_dereference | address_from_indirect_x;
-        // int any_indirect_y = value1_from_indirect_y_dereference | address_from_indirect_y;
-        int any_indirect = any_indirect_x | any_indirect_y;
-
-        // int address_absolute = (state->data2 << 8) | state->data1;
-        // int address_HL_indirect = 0;
-
-        if (any_indirect | address_from_absolute_dereference) {
-            // int address_L = any_indirect ? (0xFF & (state->data1 + ((state->X)*any_indirect_x))) : (address_absolute);
-            // int address_H = any_indirect ? (0xFF & (state->data1 + ((state->X)*any_indirect_x) + 1))
-                                         // : ((state->data2 << 8) | 0x00FF&(state->data1 + 1));
-
-            // int address_L_indirect = memory[address_L];
-            // int address_H_indirect = memory[address_H];
-            // address_HL_indirect = (address_H_indirect << 8) | address_L_indirect;
-        }
-
-        int any_dereference = // value1_from_zeropage_dereference |
-                              // value1_from_absolute_dereference |
-                              value1_from_zeropage_x_dereference | value1_from_absolute_x_dereference |
-                              // value1_from_indirect_x_dereference |
-                              value1_from_zeropage_y_dereference | value1_from_absolute_y_dereference | value1_from_indirect_y_dereference;
-
-        if (any_dereference) {
-            int address_dereference =  // ((state->data1)*value1_from_zeropage_dereference +
-                                       // (address_absolute)*value1_from_absolute_dereference +
-                                       // (address_HL_indirect)*value1_from_indirect_x_dereference +
-                                       (address_HL_indirect + state->Y)*value1_from_indirect_y_dereference +
-                                       (address_absolute + state->X)*value1_from_absolute_x_dereference +
-                                       (address_absolute + state->Y)*value1_from_absolute_y_dereference +
-                                       (0x00FF&(state->data1 + state->X))*value1_from_zeropage_x_dereference +
-                                       (0x00FF&(state->data1 + state->Y))*value1_from_zeropage_y_dereference);
-
-            state->value1 = memory.read(address_dereference, state);
-        } else {
-            state->value1 =  // ((state->data1)*value1_from_data1 +
-                             (state->stack_offset)*value1_from_stack_offset +
-                             // (state->A)*value1_from_A +
-                             // (state->X)*value1_from_X +
-                             // (state->Y)*value1_from_Y);
-        }
-
-        state->address = // ((address_absolute)*address_from_absolute +
-                         // (state->data1)*address_from_zeropage +
                          (0xFF&(state->data1 + state->X))*address_from_zeropage_x +
                          (address_HL_indirect)*address_from_absolute_dereference +
                          (address_HL_indirect)*address_from_indirect_x +
                          (address_HL_indirect + state->Y)*address_from_indirect_y +
                          (address_absolute + state->X)*address_from_absolute_x +
                          (address_absolute + state->Y)*address_from_absolute_y +
-                         (0x00FF&(state->data1 + state->Y))*address_from_zeropage_y);
+                         (0x00FF&(state->data1 + state->Y))*address_from_zeropage_y;
+    }
 
+    /*
+    void transition(SystemState* system, ComputationState* state, Memory& memory) const {
         int extra_cycle = ((0xFF00&(address_absolute    + state->X)) != (0xFF00&(   address_absolute)))*value1_from_absolute_x_dereference +
                           ((0xFF00&(address_HL_indirect + state->Y)) != (0xFF00&(address_HL_indirect)))*value1_from_indirect_y_dereference +
                           ((0xFF00&(address_absolute    + state->Y)) != (0xFF00&(   address_absolute)))*value1_from_absolute_y_dereference;

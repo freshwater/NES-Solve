@@ -125,18 +125,20 @@ struct Memory {
 int Memory__mapOffset(int index) {
     return
          (0x0000 <= index && index < 0x2000)*CPU_MEMORY +
+         // (0x2000 <= index && index < 0x4000)*PPU_REGISTERS +
          (0x8000 <= index && index < 0x10000)*CARTRIDGE_MEMORY;
 }
 
 int Memory__mapIndex(int offset, int index) {
     return (offset ==       CPU_MEMORY)*(index & 0x07FF) +
+           // (offset ==    PPU_REGISTERS)*((index - 0x2000) & 7) +
            (offset == CARTRIDGE_MEMORY)*(index - 0x8000);
 }
 
 /*
 int mapOffset(int index) {
     return      // (CPU_MEMORY)*(0x0000 <= index && index < 0x2000) +
-                (PPU_REGISTERS)*(0x2000 <= index && index < 0x4000) +
+             // (PPU_REGISTERS)*(0x2000 <= index && index < 0x4000) +
     (NULL_ADDRESS_WRITE_OFFSET)*(0x4000 <= index && index < 0x4014) +
              (PPU_OAM_REGISTER)*(0x4014 == index) +
     (NULL_ADDRESS_WRITE_OFFSET)*(0x4015 == index) +
@@ -150,7 +152,7 @@ int mapOffset(int index) {
 
 int mapIndex(int offset, int index) {
     return // (index & 0x7FF)*(CPU_MEMORY       == offset) +
-       ((index - 0x2000) & 7)*(PPU_REGISTERS    == offset) +
+    // ((index - 0x2000) & 7)*(PPU_REGISTERS    == offset) +
                           (0)*(PPU_OAM_REGISTER == offset) +
                           (0)*(CONTROL_PORT_1   == offset) +
                           (0)*(CONTROL_PORT_2   == offset) +
@@ -209,7 +211,7 @@ struct SystemState {
 #ifdef __METAL__
 
 #include "regions.h"
-#include "instructions.h"
+#include "generated/_instructions.h"
 
 void scanlineNext(thread ComputationState* state, device Memory& memory) {
     state->horizontal_scan = (state->horizontal_scan + 1) % 341;

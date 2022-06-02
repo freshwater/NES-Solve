@@ -18,13 +18,25 @@ func argumentFormat(formatType: String, programCounter: UInt16, data1: UInt8, da
         case "Implied":
             return nil
         case "Address_Relative":
-            return "$" + hex(programCounter + 2 + UInt16(data1))
+            return "$" + hex(UInt16(Int32(programCounter + 2) + Int32(Int8(truncating: NSNumber(value: data1)))))
         case "ZeropageDereference":
             return "$" + hex(data1)
         case "AbsoluteDereference":
             return "$" + hex(data2) + hex(data1)
+        case "ZeropageX":
+            return "$" + hex(data1) + ",X"
+        case "ZeropageY":
+            return "$" + hex(data1) + ",Y"
         case "IndirectX":
             return "($" + hex(data1) + ",X)"
+        case "IndirectY":
+            return "($" + hex(data1) + "),Y"
+        case "AbsoluteX":
+            return "$" + hex(data2) + hex(data1) + ",X"
+        case "AbsoluteY":
+            return "$" + hex(data2) + hex(data1) + ",Y"
+        case "AbsoluteAddressDereference":
+            return "($" + hex(data2) + hex(data1) + ")"
         default:
             return "-" + formatType
     }
@@ -34,7 +46,7 @@ func tracePrint(pTraceLines: UnsafeMutablePointer<Trace>) {
     let log = try! String(contentsOf: URL(fileURLWithPath: "/Users/amr/Desktop/Projects/clang2/data/nestest.log"))
     let logLines = log.components(separatedBy: .newlines).filter {$0 != ""}
 
-    for (i, logLine) in logLines[..<0x500].enumerated() {
+    for (i, logLine) in logLines[..<0x1800].enumerated() {
         let line = (pTraceLines + i).pointee
         var logLineStrings = logLine.components(separatedBy: .whitespaces).filter {$0 != ""}
 
@@ -64,10 +76,16 @@ func tracePrint(pTraceLines: UnsafeMutablePointer<Trace>) {
         lineStrings += byteCount > 2 ? [hex(line.byte2)] : []
 
         lineStrings.append(name)
-        lineStrings += ["LSR", "ASL", "ROR", "ROL"].contains(name) ? ["A"] : []
+        if ["LSR", "ASL", "ROR", "ROL"].contains(name) && formatType == "Implied" {
+            lineStrings.append("A")
+        }
 
         if let atIndex = logLineStrings.firstIndex(of: "@") {
-            logLineStrings.removeSubrange(atIndex...(atIndex+3))
+            if ["ZeropageX", "ZeropageY", "AbsoluteX", "AbsoluteY"].contains(formatType) {
+                logLineStrings.removeSubrange(atIndex...(atIndex+1))
+            } else {
+                logLineStrings.removeSubrange(atIndex...(atIndex+3))
+            }
         }
 
         if let arg = argumentFormat(formatType: formatType, programCounter: line.program_counter,

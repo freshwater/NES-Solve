@@ -71,7 +71,7 @@ func thing() {
             }
 
             let systemStatesBuffer = device.makeBuffer(length: MemoryLayout<SystemState>.size, options: .storageModeShared)!
-            let traceLinesBuffer = device.makeBuffer(length: MemoryLayout<Trace>.stride*0x500, options: .storageModeShared)!
+            let traceLinesBuffer = device.makeBuffer(length: MemoryLayout<Trace>.stride*0x2000, options: .storageModeShared)!
             commandEncoder.setBuffer(systemStatesBuffer, offset: 0, index: 0)
             commandEncoder.setBuffer(traceLinesBuffer, offset: 0, index: 1)
 
@@ -98,7 +98,7 @@ func thing() {
         }
     }
 
-    Thread.sleep(forTimeInterval: 1)
+    Thread.sleep(forTimeInterval: 2)
 
     print("done.")
 }

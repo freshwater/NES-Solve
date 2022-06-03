@@ -46,6 +46,8 @@ func tracePrint(pTraceLines: UnsafeMutablePointer<Trace>) {
     let log = try! String(contentsOf: URL(fileURLWithPath: "/Users/amr/Desktop/Projects/clang2/data/nestest.log"))
     let logLines = log.components(separatedBy: .newlines).filter {$0 != ""}
 
+    var mismatchCount: Int = 0
+
     for (i, logLine) in logLines[..<0x1800].enumerated() {
         let line = (pTraceLines + i).pointee
         var logLineStrings = logLine.components(separatedBy: .whitespaces).filter {$0 != ""}
@@ -67,9 +69,7 @@ func tracePrint(pTraceLines: UnsafeMutablePointer<Trace>) {
             }
         }
 
-        logLineStrings = Array(logLineStrings[0..<(logLineStrings.count - 2)])
-
-        let (name, byteCount, formatType) = instructionsInformation[Int(line.opcode)]!
+        let (name, byteCount, formatType) = instructionsInformation[Int(line.opcode)] ?? ("Unimplemented", 0, "Unimplemented")
 
         var lineStrings = [hex(line.program_counter), hex(line.opcode)]
         lineStrings += byteCount > 1 ? [hex(line.byte1)] : []
@@ -98,7 +98,8 @@ func tracePrint(pTraceLines: UnsafeMutablePointer<Trace>) {
         lineStrings.append("Y:" + hex(line.Y))
         lineStrings.append("P:" + hex(line.status_register))
         lineStrings.append("SP:" + hex(line.stack_offset))
-        // lineStrings.append("PPU:" + "0," + String(line.horizontal_scan))
+        lineStrings.append("PPU:\(line.vertical_scan),\(line.horizontal_scan)")
+        lineStrings.append("CYC:\(line.cycle)")
 
         let len = zip(lineStrings, logLineStrings).prefix(while: (==)).count
         let logBlanked = logLineStrings.enumerated().map { $0 < len ? $1.map({_ in " "}).joined() : $1 }
@@ -112,11 +113,15 @@ func tracePrint(pTraceLines: UnsafeMutablePointer<Trace>) {
                 print("\n<" + l1 + ", " + l2 + ">", terminator: " ")
             }
         }
+
         if lineStrings != logLineStrings {
             print()
             print()
 
-            break
+            mismatchCount += 1
+            if mismatchCount == 1 {
+                break
+            }
         }
     }
 

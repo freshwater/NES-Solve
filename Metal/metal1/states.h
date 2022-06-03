@@ -28,12 +28,9 @@ struct Trace {
     int8u_t status_register;
     int8u_t stack_offset;
 
-    int16_t horizontal_scan;
-
-    /*
     int16_t vertical_scan;
     int16_t horizontal_scan;
-    int16u_t cycle;*/
+    uint16_t cycle;
 };
 
 #ifdef __METAL__
@@ -69,16 +66,16 @@ struct ComputationState {
     int8u_t ppu_status;
     */
 
-    int horizontal_scan = 21 - 3;
-
-    /*
-    int controller_read_position = 0;
-
-    int vertical_scan = -1;
+    int vertical_scan = 0;
     int horizontal_scan = 21 - 3;
     int instruction_countdown = 1;
 
     int64_t ppu_cycle = 21 - 3;
+
+    /*
+    int controller_read_position = 0;
+
+    // int64_t ppu_cycle = 21 - 3;
     int64_t frame_count = 0;
     int64_t num_actions = 0;
     */
@@ -103,6 +100,8 @@ struct ComputationState {
  int8u_t null_address_read[2] = {};
  int8u_t null_address_write[2] = {};
  */
+
+#define NOP_instruction         0x6B
 
 #define CPU_MEMORY         0x0000
 #define PPU_REGISTERS      (CPU_MEMORY + 0x800)
@@ -206,6 +205,23 @@ struct SystemState {
 
     int16u_t program_counter_initial;
     int8u_t stack_offset_initial;
+
+    int trace_lines_index;
+
+    /*
+     uint8_t* frames_red;
+     uint8_t* frames_green;
+     uint8_t* frames_blue;
+     int64_t frames_pixel_index = 0;
+     float* data_lines;
+     int64_t data_lines_index = 0;
+
+     uint8_t* hash_sets;
+
+     Trace traceLineLast;
+     Trace* trace_lines;
+     // int trace_lines_index = 0;
+     */
 };
 
 #ifdef __METAL__
@@ -215,27 +231,51 @@ struct SystemState {
 
 void scanlineNext(thread ComputationState* state, device Memory& memory) {
     state->horizontal_scan = (state->horizontal_scan + 1) % 341;
+    state->vertical_scan += (state->horizontal_scan == 0);
+    // state->vertical_scan = (state->vertical_scan == 261) ? -1 : state->vertical_scan;
 }
 
-void SystemState__next(thread ComputationState* state, device Memory& memory, device Trace* traceLines, int traceLinesIndex) {
-    state->opcode = Memory__readMemoryRaw(memory, state->program_counter + 0);
+void traceWrite(device Trace* traceLines, int traceLinesIndex, thread ComputationState* state) {
+    traceLines[traceLinesIndex] = {
+        .program_counter = state->program_counter,
+        .opcode = state->opcode,
+        .byte1 = state->data1,
+        .byte2 = state->data2,
+        .A = state->A,
+        .X = state->X,
+        .Y = state->Y,
+        .status_register = state->statusRegisterByteGet(),
+        .stack_offset = state->stack_offset,
+        .vertical_scan = (int16_t) state->vertical_scan,
+        .horizontal_scan = (int16_t) state->horizontal_scan,
+        .cycle = (uint16_t) (state->ppu_cycle / 3)
+    };
+}
+
+void SystemState__next(device SystemState& systemState, thread ComputationState* state,
+                       device Memory& memory, device Trace* traceLines) {
+
+    int8u_t opcode = Memory__readMemoryRaw(memory, state->program_counter + 0);
     state->data1  = Memory__readMemoryRaw(memory, state->program_counter + 1);
     state->data2  = Memory__readMemoryRaw(memory, state->program_counter + 2);
 
     scanlineNext(state, memory);
+    state->ppu_cycle++;
     scanlineNext(state, memory);
+    state->ppu_cycle++;
     scanlineNext(state, memory);
+    state->ppu_cycle++;
 
-    traceLines[traceLinesIndex].program_counter = state->program_counter;
-    traceLines[traceLinesIndex].opcode = state->opcode;
-    traceLines[traceLinesIndex].byte1 = state->data1;
-    traceLines[traceLinesIndex].byte2 = state->data2;
-    traceLines[traceLinesIndex].A = state->A;
-    traceLines[traceLinesIndex].X = state->X;
-    traceLines[traceLinesIndex].Y = state->Y;
-    traceLines[traceLinesIndex].status_register = state->statusRegisterByteGet();
-    traceLines[traceLinesIndex].stack_offset = state->stack_offset;
-    traceLines[traceLinesIndex].horizontal_scan = state->horizontal_scan;
+    state->instruction_countdown -= 1; // (!state->is_DMA_active);
+    bool instruction_OK = (state->instruction_countdown == 0);
+    opcode = (NOP_instruction)*(!instruction_OK) + (opcode)*instruction_OK;
+
+    state->opcode = opcode;
+
+    if (instruction_OK) {
+        traceWrite(traceLines, systemState.trace_lines_index, state);
+        systemState.trace_lines_index++;
+    }
 
     instructions[state->opcode].transition(state, memory);
 }

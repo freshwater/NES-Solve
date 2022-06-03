@@ -67,7 +67,7 @@ struct Region_Wire {
                                       (address_absolute + state->X)*value1_from_absolute_x_dereference +
                                       (address_absolute + state->Y)*value1_from_absolute_y_dereference +
                                       (0xFF&(state->data1 + state->X))*value1_from_zeropage_x_dereference +
-                                      (0x00FF&(state->data1 + state->Y))*value1_from_zeropage_y_dereference;
+                                      (0xFF&(state->data1 + state->Y))*value1_from_zeropage_y_dereference;
 
             state->value1 = Memory__readMemoryLogical(memory, address_dereference);
 
@@ -88,18 +88,15 @@ struct Region_Wire {
                          (address_HL_indirect + state->Y)*address_from_indirect_y +
                          (address_absolute + state->X)*address_from_absolute_x +
                          (address_absolute + state->Y)*address_from_absolute_y +
-                         (0x00FF&(state->data1 + state->Y))*address_from_zeropage_y;
-    }
+                         (0xFF&(state->data1 + state->Y))*address_from_zeropage_y;
 
-    /*
-    void transition(SystemState* system, ComputationState* state, Memory& memory) const {
         int extra_cycle = ((0xFF00&(address_absolute    + state->X)) != (0xFF00&(   address_absolute)))*value1_from_absolute_x_dereference +
                           ((0xFF00&(address_HL_indirect + state->Y)) != (0xFF00&(address_HL_indirect)))*value1_from_indirect_y_dereference +
-                          ((0xFF00&(address_absolute    + state->Y)) != (0xFF00&(   address_absolute)))*value1_from_absolute_y_dereference;
+                          ((0xFF00&(address_absolute    + state->Y)) != (0xFF00&(   address_absolute)))*value1_from_absolute_y_dereference +
+                          ((0xFF00&(state->address                )) != (0xFF00&(   address_absolute)))*(address_from_absolute_x && (state->opcode & 0x0F) == 0x0C); // illegal NOP instructions
 
         state->instruction_countdown += cycle_base_increment + extra_cycle;
     }
-    */
 };
 
 struct Region_Compare {
@@ -325,19 +322,9 @@ struct Region_Branch {
                          (state->C == flag_match)*C_flag_branch;
 
         state->program_counter = state->program_counter + ((int8_t)(state->value1))*condition;
-    }
-    /*
-    void transition(SystemState* system, ComputationState* state, Memory& memory) const {
-        bool condition =  // ((state->N == flag_match)*N_flag_branch +
-                          // (state->O == flag_match)*O_flag_branch +
-                          // (state->Z == flag_match)*Z_flag_branch +
-                          // (state->C == flag_match)*C_flag_branch);
-
-        // state->program_counter = state->program_counter + ((int8_t)(state->value1))*condition;
 
         state->instruction_countdown += condition;
     }
-    */
 };
 
 struct Region_Write {

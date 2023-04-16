@@ -31,18 +31,3 @@ The intuition behind the block score is as follows. First, it has less variance 
 Third, games are visual and designed for humans to enjoy. The general characteristics of games as entertainment implies that greater progress through a game involves greater visual entropy, so to speak. By contrast, a game's score system is often just a way of adding texture and otherwise not a significant element.
 
 I may be totally wrong on all of these points, but I'll worry about that later. Note that the block score actually does account for the human-given score to some degree. Particular kernel sizes or offsets will allow the digital score shown on the screen to be tracked logarithmically, which is about right. And for example, in Super Mario Bros small +100 tokens appear near events, which will count if they are unique.
-
-Language
---
-
-Other related experiments involve thinking of the commands/button presses given to a game as a "language." I'm particularly curious about the kind of information that can leak from the game world to the language world, using only the score and the given command sequences themselves.
-
-Think of it as trying to side-channel attack the game.
-
-This gets to the heart of a lot of problems. It's similar to the problem faced by regular NLP where models are trained on the "language world" data and not directly on the real world itself.
-
-In the case of games, if we have a certain set of command inputs which map to a certain set of scores, there is a large theoretical space of games which all correspond to that same mapping or game progress, even though the underlying games could be considered different by human players. A trivial example would be a stateful Dance Dance Revolution style song whose button presses exactly match the button presses needed to pass any given stage of any given game.
-
-Likewise for human languages, there exists a large space of theoretical worlds that are indistinguishable at the language level because they emit the same string of language expressions, even more so if we allow "isomorphism" in languages.
-
-This is the perspective that machine learning methods are coming from when we apply them to language. We are trying to side-channel attack the underlying world through abstract sequences of words, with the mathematical universe accounting for an infinite set of possible underlying worlds.
